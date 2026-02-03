@@ -1,0 +1,23 @@
+[project]
+name = "cis568"
+version = "0.1.0"
+package-mode = false
+description = "Data Visualization class"
+authors = [
+    {name = "Gustavo Franco",email = "gfranco008@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas (>=3.0.0,<4.0.0)",
+    "matplotlib (>=3.10.8,<4.0.0)",
+    "plotly (>=6.5.2,<7.0.0)",
+    "seaborn (>=0.13.2,<0.14.0)",
+    "numpy (>=2.4.1,<3.0.0)",
+    "jupyter (>=1.1.1,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
