@@ -1,0 +1,305 @@
+
+<div class="dash">
+  <div class="chart-wrap">
+    <div id="d3-multiline-chart"></div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-title">Data</div>
+    <div class="table-scroll">
+      <table id="d3-data-table"></table>
+    </div>
+  </div>
+</div>
+
+<style>
+  .dash {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+  }
+
+  .chart-wrap { flex: 2; min-width: 680px; }
+  .table-wrap {
+    flex: 1;
+    min-width: 360px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .table-title {
+    padding: 10px 12px;
+    font: 600 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  .table-scroll { max-height: 780px; overflow: auto; }
+
+  table { width: 100%; border-collapse: collapse; font: 12px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #eef2f7; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    position: sticky; top: 0;
+    background: #f1f5f9; color: #0f172a;
+    z-index: 1; border-bottom: 1px solid #e2e8f0;
+  }
+  tbody tr:hover { background: #f8fafc; }
+
+  .chart-title { font: 600 16px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #0b1f3a; }
+  .axis path, .axis line { stroke: #94a3b8; }
+  .grid line { stroke: #e2e8f0; }
+  .legend text { font: 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #0f172a; }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(15, 23, 42, 0.92);
+    color: white;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font: 12px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+    min-width: 200px;
+  }
+  .tooltip .date { font-weight: 700; margin-bottom: 6px; }
+  .tooltip .row { display: flex; justify-content: space-between; gap: 12px; }
+  .tooltip .label { opacity: 0.9; }
+  .tooltip .value { font-variant-numeric: tabular-nums; }
+</style>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(() => {
+  const data = [{"date": "2019-01-01", "EstimatedCost": 1094, "ActualCost": 637, "SoldPrice": 1203.4, "MarginOfProfit": 566.4000000000001}, {"date": "2019-02-01", "EstimatedCost": 2850, "ActualCost": 771, "SoldPrice": 3135.0000000000005, "MarginOfProfit": 2364.0000000000005}, {"date": "2019-03-01", "EstimatedCost": 2168, "ActualCost": 855, "SoldPrice": 2384.8, "MarginOfProfit": 1529.8000000000002}, {"date": "2019-04-01", "EstimatedCost": 1370, "ActualCost": 961, "SoldPrice": 1507.0000000000002, "MarginOfProfit": 546.0000000000002}, {"date": "2019-05-01", "EstimatedCost": 2429, "ActualCost": 874, "SoldPrice": 2671.9, "MarginOfProfit": 1797.9}, {"date": "2019-06-01", "EstimatedCost": 1644, "ActualCost": 569, "SoldPrice": 1808.4, "MarginOfProfit": 1239.4}, {"date": "2019-07-01", "EstimatedCost": 1641, "ActualCost": 1167, "SoldPrice": 1805.1000000000001, "MarginOfProfit": 638.1000000000001}, {"date": "2019-08-01", "EstimatedCost": 2340, "ActualCost": 1174, "SoldPrice": 2574.0, "MarginOfProfit": 1400.0}, {"date": "2019-09-01", "EstimatedCost": 2327, "ActualCost": 153, "SoldPrice": 2559.7000000000003, "MarginOfProfit": 2406.7000000000003}, {"date": "2019-10-01", "EstimatedCost": 1486, "ActualCost": 959, "SoldPrice": 1634.6000000000001, "MarginOfProfit": 675.6000000000001}, {"date": "2019-11-01", "EstimatedCost": 383, "ActualCost": 103, "SoldPrice": 421.3, "MarginOfProfit": 318.3}, {"date": "2019-12-01", "EstimatedCost": 451, "ActualCost": 895, "SoldPrice": 496.1, "MarginOfProfit": -398.9}, {"date": "2020-01-01", "EstimatedCost": 900, "ActualCost": 616, "SoldPrice": 990.0000000000001, "MarginOfProfit": 374.0000000000001}, {"date": "2020-02-01", "EstimatedCost": 1653, "ActualCost": 802, "SoldPrice": 1818.3000000000002, "MarginOfProfit": 1016.3000000000002}, {"date": "2020-03-01", "EstimatedCost": 1070, "ActualCost": 345, "SoldPrice": 1177.0, "MarginOfProfit": 832.0}, {"date": "2020-04-01", "EstimatedCost": 443, "ActualCost": 644, "SoldPrice": 487.3, "MarginOfProfit": -156.7}, {"date": "2020-05-01", "EstimatedCost": 2473, "ActualCost": 617, "SoldPrice": 2720.3, "MarginOfProfit": 2103.3}, {"date": "2020-06-01", "EstimatedCost": 1453, "ActualCost": 545, "SoldPrice": 1598.3000000000002, "MarginOfProfit": 1053.3000000000002}, {"date": "2020-07-01", "EstimatedCost": 1659, "ActualCost": 930, "SoldPrice": 1824.9, "MarginOfProfit": 894.9000000000001}, {"date": "2020-08-01", "EstimatedCost": 761, "ActualCost": 1113, "SoldPrice": 837.1, "MarginOfProfit": -275.9}, {"date": "2020-09-01", "EstimatedCost": 930, "ActualCost": 552, "SoldPrice": 1023.0000000000001, "MarginOfProfit": 471.0000000000001}];
+  const series = ["EstimatedCost", "ActualCost", "SoldPrice", "MarginOfProfit"];
+
+  // ---------------------------
+  // Build Table (right side)
+  // ---------------------------
+  const table = d3.select('#d3-data-table');
+  table.selectAll('*').remove();
+  const columns = ['date'].concat(series);
+
+  table.append('thead').append('tr')
+    .selectAll('th')
+    .data(columns)
+    .enter().append('th')
+    .text(d => d);
+
+  const tbody = table.append('tbody');
+  const fmt = d3.format(',.2f');
+
+  data.forEach(row => {
+    const tr = tbody.append('tr');
+    columns.forEach(col => {
+      let v = row[col];
+      if (col !== 'date') {
+        const num = +v;
+        v = Number.isFinite(num) ? fmt(num) : '';
+      }
+      tr.append('td').text(v);
+    });
+  });
+
+  // ---------------------------
+  // Build Chart (left side)
+  // ---------------------------
+  const container = d3.select('#d3-multiline-chart');
+  container.selectAll('*').remove();
+
+  const margin = { top: 40, right: 120, bottom: 40, left: 60 };
+  const width = 1000 - margin.left - margin.right;
+  const height = 800 - margin.top - margin.bottom;
+
+  const wrapper = container.append('div')
+    .style('position', 'relative');
+
+const svg = wrapper.append('svg')
+  .attr('viewBox', '0 0 1000 800')
+  .attr('preserveAspectRatio', 'xMidYMid meet')
+  .style('width', '100%')
+  .style('height', 'auto');
+
+  const g = svg.append('g')
+    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+  const parseDate = d3.timeParse('%Y-%m-%d');
+  data.forEach(d => {
+    d.date = parseDate(d.date);
+    series.forEach(s => d[s] = +d[s]);
+  });
+
+  // Sort by date (important for bisector)
+  data.sort((a, b) => a.date - b.date);
+
+  const x = d3.scaleTime()
+    .domain(d3.extent(data, d => d.date))
+    .range([0, width]);
+
+  const yMax = d3.max(series, s => d3.max(data, d => Number.isFinite(d[s]) ? d[s] : undefined)) ?? 0;
+
+  const y = d3.scaleLinear()
+    .domain([-500, yMax])
+    .nice()
+    .range([height, 0]);
+
+  const color = d3.scaleOrdinal()
+    .domain(series)
+    .range(d3.schemeCategory10);
+
+  const line = d3.line()
+    .defined(d => Number.isFinite(d.value))
+    .x(d => x(d.date))
+    .y(d => y(d.value));
+
+  const seriesData = series.map(name => ({
+    name: name,
+    values: data.map(d => ({ date: d.date, value: d[name] }))
+  }));
+
+  g.append('g')
+    .attr('class', 'grid')
+    .call(d3.axisLeft(y).ticks(6).tickSize(-width).tickFormat(''));
+
+  g.append('g')
+    .attr('class', 'axis')
+    .attr('transform', 'translate(0,' + height + ')')
+    .call(d3.axisBottom(x));
+
+  g.append('g')
+    .attr('class', 'axis')
+    .call(d3.axisLeft(y));
+
+  g.append('text')
+    .attr('class', 'chart-title')
+    .attr('x', 0)
+    .attr('y', -12)
+    .text('Project Financials Over Time');
+
+  g.selectAll('.series')
+    .data(seriesData)
+    .join('path')
+    .attr('class', 'series')
+    .attr('fill', 'none')
+    .attr('stroke', d => color(d.name))
+    .attr('stroke-width', 2)
+    .attr('d', d => line(d.values));
+
+  const legend = g.append('g')
+    .attr('class', 'legend')
+    .attr('transform', 'translate(' + (width + 20) + ',0)');
+
+  const legendItem = legend.selectAll('g')
+    .data(series)
+    .join('g')
+    .attr('transform', (d, i) => 'translate(0,' + (i * 18) + ')');
+
+  legendItem.append('rect')
+    .attr('width', 12)
+    .attr('height', 12)
+    .attr('fill', d => color(d));
+
+  legendItem.append('text')
+    .attr('x', 18)
+    .attr('y', 10)
+    .text(d => d);
+
+  // ---------------------------
+  // Tooltip + Hover Interaction
+  // ---------------------------
+  const tooltip = wrapper.append('div')
+    .attr('class', 'tooltip')
+    .style('display', 'none');
+
+  const focus = g.append('g')
+    .style('display', 'none');
+
+  // vertical line
+  focus.append('line')
+    .attr('class', 'focus-line')
+    .attr('y1', 0)
+    .attr('y2', height)
+    .attr('stroke', '#334155')
+    .attr('stroke-width', 1)
+    .attr('stroke-dasharray', '3,3');
+
+  // one circle per series
+  const focusDots = focus.selectAll('circle')
+    .data(series)
+    .enter()
+    .append('circle')
+    .attr('r', 4)
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 1.5)
+    .attr('fill', d => color(d));
+
+  const bisectDate = d3.bisector(d => d.date).left;
+  const dateFmt = d3.timeFormat('%b %d, %Y');
+
+  // overlay for capturing mouse
+  g.append('rect')
+    .attr('class', 'overlay')
+    .attr('width', width)
+    .attr('height', height)
+    .attr('fill', 'transparent')
+    .on('mouseenter', () => {
+      focus.style('display', null);
+      tooltip.style('display', null);
+    })
+    .on('mouseleave', () => {
+      focus.style('display', 'none');
+      tooltip.style('display', 'none');
+    })
+    .on('mousemove', (event) => {
+      const [mx] = d3.pointer(event);
+      const xDate = x.invert(mx);
+
+      const i = bisectDate(data, xDate, 1);
+      const d0 = data[i - 1];
+      const d1 = data[i] || d0;
+      const d = (xDate - d0.date) > (d1.date - xDate) ? d1 : d0;
+
+      const fx = x(d.date);
+
+      // move focus line
+      focus.select('line')
+        .attr('x1', fx)
+        .attr('x2', fx);
+
+      // move dots
+      focusDots
+        .attr('cx', fx)
+        .attr('cy', s => y(d[s]));
+
+      // tooltip content
+      const rows = series.map(s => {
+        const val = Number.isFinite(d[s]) ? fmt(d[s]) : '—';
+        return '<div class="row"><span class="label">' + s + '</span><span class="value">' + val + '</span></div>';
+      }).join('');
+
+      tooltip.html(
+        '<div class="date">' + dateFmt(d.date) + '</div>' + rows
+      );
+
+      // tooltip position (relative to wrapper)
+      const pad = 14;
+      const bbox = wrapper.node().getBoundingClientRect();
+      const pageX = event.clientX - bbox.left;
+      const pageY = event.clientY - bbox.top;
+
+      // nudge right unless near edge
+      const tW = 240;
+      const left = (pageX + pad + tW > (margin.left + width + margin.right))
+        ? (pageX - tW - pad)
+        : (pageX + pad);
+
+      const top = Math.max(0, pageY - 20);
+
+      tooltip
+        .style('left', left + 'px')
+        .style('top', top + 'px');
+    });
+
+})();
+</script>
