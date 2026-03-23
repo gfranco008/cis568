@@ -1,0 +1,58 @@
+body {
+    margin: 0;
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+svg {
+    display: block;
+    width: 100%;
+    max-width: 1400px;
+    overflow: hidden;
+}
+
+circle {
+    fill-opacity: 0.9;
+    stroke: rgba(255, 255, 255, 0.55);
+    stroke-width: 1px;
+    cursor: pointer;
+    transition: opacity 0.15s ease, stroke-width 0.2s ease, filter 0.2s ease;
+}
+
+line {
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-width: 0.8px;
+    stroke-opacity: 0.6;
+}
+
+.label {
+    font-family: sans-serif;
+    fill: #fff;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+/* Dimmed state — applied to nodes NOT in the hovered cluster */
+.inactive circle {
+    opacity: 0.08;
+}
+
+.inactive text {
+    opacity: 0.05;
+}
+
+/* Info banner */
+.banner {
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+}
+
+/* Hovered cluster nodes — bright outline */
+.active circle {
+    stroke: #fff;
+    stroke-width: 3px;
+    filter: drop-shadow(0 0 5px currentColor);
+}

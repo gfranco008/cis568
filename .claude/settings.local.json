@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import d3blocks; help\\(d3blocks.D3Blocks.d3graph\\)\")",
+      "Bash(python3 -c \"from d3graph import d3graph, vec2adjmat; help\\(d3graph.graph\\)\")"
+    ]
+  }
+}

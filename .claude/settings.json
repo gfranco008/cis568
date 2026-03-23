@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"from d3graph import d3graph, vec2adjmat; help\\(d3graph.show\\)\")",
+      "Bash(ffmpeg -i /Users/gfranco/Documents/cis568/data/network.mp4 -vframes 3 -ss 00:00:02 /tmp/net_frame_%02d.png)",
+      "Read(//tmp/**)",
+      "Read(//private/tmp/**)",
+      "Bash(python3 -:*)"
+    ]
+  }
+}

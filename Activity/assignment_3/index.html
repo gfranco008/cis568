@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Email Network — Force Layout</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="network.js"></script>
+</head>
+<body>
+<script>
+    d3.json("../../data/Emails_Graph_kmeans.json").then(function(data) {
+        let svg = d3.select('body').append("svg").attr("viewBox", "0 0 1400 860");
+        simulate(data, svg);
+    });
+</script>
+</body>
+</html>
