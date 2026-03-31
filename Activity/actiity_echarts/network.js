@@ -9,6 +9,12 @@ const data = [
   { parentColumn: "C", childColumn: "H", val: 60 }
 ];
 
+const LEVEL_STYLES = [
+  { color: "#555555", symbolSize: 22, borderWidth: 3 },
+  { color: "#52ab80", symbolSize: 14, borderWidth: 2.4 },
+  { color: "#e8aa63", symbolSize: 9, borderWidth: 2 }
+];
+
 function buildHierarchy(rows) {
   const nodeMap = new Map();
 
@@ -45,11 +51,19 @@ function buildHierarchy(rows) {
   return root;
 }
 
-function toTreeNode(node) {
+function toTreeNode(node, depth = 0) {
+  const levelStyle = LEVEL_STYLES[Math.min(depth, LEVEL_STYLES.length - 1)];
+
   return {
     name: node.name,
     value: node.value,
-    children: node.children.map(toTreeNode)
+    symbolSize: levelStyle.symbolSize,
+    itemStyle: {
+      color: levelStyle.color,
+      borderColor: levelStyle.color,
+      borderWidth: levelStyle.borderWidth
+    },
+    children: node.children.map(child => toTreeNode(child, depth + 1))
   };
 }
 
@@ -81,8 +95,7 @@ const option = {
       bottom: "8%",
       right: "8%",
       layout: "radial",
-      symbol: "circle",
-      symbolSize: 10,
+      symbol: "emptyCircle",
       expandAndCollapse: false,
       initialTreeDepth: 3,
       animationDurationUpdate: 750,
@@ -91,8 +104,8 @@ const option = {
         focus: "descendant"
       },
       itemStyle: {
-        color: "#8fa8c6",
-        borderColor: "#a9bad1",
+        color: LEVEL_STYLES[0].color,
+        borderColor: LEVEL_STYLES[0].color,
         borderWidth: 1.8
       },
       lineStyle: {
