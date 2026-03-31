@@ -9,6 +9,36 @@ const data = [
   { parentColumn: "C", childColumn: "H", val: 60 }
 ];
 
+const LEVELS = [
+  {
+    itemStyle: {
+      borderColor: "#555555",
+      borderWidth: 3
+    },
+    label: {
+      show: true
+    }
+  },
+  {
+    itemStyle: {
+      borderColor: "#52ab80",
+      borderWidth: 2.4
+    },
+    label: {
+      show: true
+    }
+  },
+  {
+    itemStyle: {
+      borderColor: "#e8aa63",
+      borderWidth: 2
+    },
+    label: {
+      show: true
+    }
+  }
+];
+
 function buildHierarchy(rows) {
   const nodeMap = new Map();
 
@@ -67,10 +97,12 @@ function buildGraphLayout(root, width, height) {
   const rootSize = Math.max(26, Math.min(34, width * 0.042));
   const branchSize = Math.max(14, Math.min(18, width * 0.018));
   const leafSize = Math.max(8, Math.min(12, width * 0.011));
+  const getLevelConfig = depth => LEVELS[Math.min(depth, LEVELS.length - 1)] || {};
 
   const registerNode = (node, x, y, side, depth) => {
     const isLeaf = node.children.length === 0;
     const isRoot = depth === 0;
+    const levelConfig = getLevelConfig(depth);
 
     nodes.set(node.name, {
       id: node.name,
@@ -87,7 +119,8 @@ function buildGraphLayout(root, width, height) {
         borderColor: "#a7b8d0",
         borderWidth: isRoot ? 2.3 : 1.8,
         shadowBlur: isRoot ? 8 : 0,
-        shadowColor: "rgba(107, 131, 166, 0.18)"
+        shadowColor: "rgba(107, 131, 166, 0.18)",
+        ...levelConfig.itemStyle
       },
       label: {
         show: true,
@@ -95,7 +128,8 @@ function buildGraphLayout(root, width, height) {
         fontSize: isRoot ? 15 : 13,
         fontWeight: isRoot ? 600 : 500,
         position: isRoot ? "bottom" : (side === "left" ? "left" : "right"),
-        distance: isRoot ? 10 : 6
+        distance: isRoot ? 10 : 6,
+        ...levelConfig.label
       }
     });
   };
