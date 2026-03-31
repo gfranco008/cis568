@@ -16,6 +16,7 @@ const LEVEL_STYLES = [
 ];
 const TREEMAP_FILL = "#606060";
 const TREEMAP_BORDER = "#f0ae62";
+const TREEMAP_TOP = "#ffffff";
 
 function buildHierarchy(rows) {
   const nodeMap = new Map();
@@ -76,14 +77,63 @@ function toTreemapNode(node, depth = 0) {
   const value = children.length === 0
     ? (node.value ?? 0)
     : children.reduce((sum, child) => sum + child.value, 0);
-
-  return {
+  const baseNode = {
     name: node.name,
     value,
-    itemStyle: {
-      color: depth === 0 ? "#ffffff" : TREEMAP_FILL
-    },
     children
+  };
+
+  if (depth === 0) {
+    return {
+      ...baseNode,
+      itemStyle: {
+        color: "#ffffff",
+        borderColor: "#ffffff",
+        borderWidth: 0,
+        gapWidth: 8
+      },
+      upperLabel: {
+        show: true,
+        color: "#343434",
+        height: 18
+      }
+    };
+  }
+
+  if (children.length > 0) {
+    return {
+      ...baseNode,
+      itemStyle: {
+        color: TREEMAP_FILL,
+        borderColor: TREEMAP_BORDER,
+        borderWidth: 3,
+        gapWidth: 1
+      },
+      upperLabel: {
+        show: true,
+        color: TREEMAP_BORDER,
+        height: 18
+      }
+    };
+  }
+
+  return {
+    ...baseNode,
+    label: {
+      show: true,
+      color: "#ffffff",
+      position: "inside",
+      fontSize: 13,
+      fontWeight: 600,
+      align: "center",
+      verticalAlign: "middle"
+    },
+    itemStyle: {
+      color: TREEMAP_FILL,
+      borderColor: TREEMAP_BORDER,
+      borderWidth: 2,
+      gapWidth: 1
+    }
   };
 }
 
@@ -216,24 +266,22 @@ function buildTreemapOption() {
           },
           {
             itemStyle: {
-              color: TREEMAP_FILL,
-              borderColor: TREEMAP_BORDER,
-              borderWidth: 3,
-              gapWidth: 3,
+              borderColor: "#ffffff",
+              borderWidth: 0,
+              gapWidth: 8,
               borderRadius: 0
             },
             upperLabel: {
               show: true,
-              color: TREEMAP_BORDER,
+              color: "#343434",
               height: 18
             }
           },
           {
             itemStyle: {
-              color: TREEMAP_FILL,
               borderColor: TREEMAP_BORDER,
               borderWidth: 2,
-              gapWidth: 2,
+              gapWidth: 1,
               borderRadius: 0
             },
             label: {
@@ -248,10 +296,9 @@ function buildTreemapOption() {
           },
           {
             itemStyle: {
-              color: TREEMAP_FILL,
               borderColor: TREEMAP_BORDER,
               borderWidth: 2,
-              gapWidth: 2,
+              gapWidth: 1,
               borderRadius: 0
             },
             label: {
