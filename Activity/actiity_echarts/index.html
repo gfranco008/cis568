@@ -10,13 +10,17 @@
 <body>
   <main class="page">
     <header class="intro">
-      <p class="eyebrow">Make the following ECharts visualizations:</p>
-      <h1>1. Tree of the data</h1>
-      <p class="subtitle">Leaf values are available on hover so the diagram stays clean like the reference sketch.</p>
+      <p class="eyebrow">ECharts Visualizations:</p>
+      <h1>Tree Views of the Data</h1>
+      <p class="subtitle">Start on the tree tab, then switch to the treemap tab to compare the same hierarchy in two layouts.</p>
     </header>
 
     <section class="card">
-      <div id="tree-chart" class="chart-container"></div>
+      <div class="tab-bar" role="tablist" aria-label="Visualization views">
+        <button class="tab is-active" type="button" role="tab" aria-selected="true" data-view="tree">Tree</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-view="treemap">TreeMap</button>
+      </div>
+      <div id="chart-view" class="chart-container"></div>
     </section>
   </main>
 

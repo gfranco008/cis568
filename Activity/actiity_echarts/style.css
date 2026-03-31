@@ -60,6 +60,36 @@ h1 {
   box-shadow: var(--shadow);
 }
 
+.tab-bar {
+  display: flex;
+  gap: 10px;
+  padding: 8px 8px 14px;
+}
+
+.tab {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: #ecf2f8;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.tab:hover {
+  transform: translateY(-1px);
+}
+
+.tab.is-active,
+.tab[aria-selected="true"] {
+  background: var(--ink);
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(37, 54, 77, 0.18);
+}
+
 .chart-container {
   width: 100%;
   height: min(72vh, 680px);
@@ -77,6 +107,15 @@ h1 {
   .card {
     padding: 6px;
     border-radius: 18px;
+  }
+
+  .tab-bar {
+    gap: 8px;
+    padding: 6px 6px 12px;
+  }
+
+  .tab {
+    padding: 9px 14px;
   }
 
   .chart-container {

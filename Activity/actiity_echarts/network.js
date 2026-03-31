@@ -14,6 +14,8 @@ const LEVEL_STYLES = [
   { color: "#52ab80", symbolSize: 14, borderWidth: 2.4 },
   { color: "#e8aa63", symbolSize: 9, borderWidth: 2 }
 ];
+const TREEMAP_FILL = "#606060";
+const TREEMAP_BORDER = "#f0ae62";
 
 function buildHierarchy(rows) {
   const nodeMap = new Map();
@@ -67,11 +69,34 @@ function toTreeNode(node, depth = 0) {
   };
 }
 
-const treeData = toTreeNode(buildHierarchy(data));
-const chart = echarts.init(document.getElementById("tree-chart"));
+function toTreemapNode(node, depth = 0) {
+  const children = node.children
+    .map(child => toTreemapNode(child, depth + 1))
+    .sort((a, b) => b.value - a.value);
+  const value = children.length === 0
+    ? (node.value ?? 0)
+    : children.reduce((sum, child) => sum + child.value, 0);
 
-const option = {
-  tooltip: {
+  return {
+    name: node.name,
+    value,
+    itemStyle: {
+      color: depth === 0 ? "#ffffff" : TREEMAP_FILL
+    },
+    children
+  };
+}
+
+const hierarchy = buildHierarchy(data);
+const treeData = toTreeNode(hierarchy);
+const treemapData = toTreemapNode(hierarchy);
+
+const chart = echarts.init(document.getElementById("chart-view"));
+const tabs = Array.from(document.querySelectorAll(".tab"));
+let activeView = "tree";
+
+function buildTooltip() {
+  return {
     trigger: "item",
     triggerOn: "mousemove",
     backgroundColor: "rgba(34, 49, 72, 0.92)",
@@ -85,91 +110,185 @@ const option = {
         ? `<strong>${params.data.name}</strong><br/>Value: ${value}`
         : `<strong>${params.data.name}</strong>`;
     }
-  },
-  series: [
-    {
-      type: "tree",
-      data: [treeData],
-      top: "8%",
-      left: "8%",
-      bottom: "8%",
-      right: "8%",
-      layout: "radial",
-      symbol: "emptyCircle",
-      expandAndCollapse: false,
-      initialTreeDepth: 3,
-      animationDurationUpdate: 750,
-      roam: true,
-      emphasis: {
-        focus: "descendant"
-      },
-      itemStyle: {
-        color: LEVEL_STYLES[0].color,
-        borderColor: LEVEL_STYLES[0].color,
-        borderWidth: 1.8
-      },
-      lineStyle: {
-        color: "#bcc9da",
-        width: 1.4,
-        curveness: 0.35
-      },
-      label: {
-        position: "rotate",
-        verticalAlign: "middle",
-        align: "right",
-        fontSize: 13,
-        color: "#2f455b"
-      },
-      leaves: {
+  };
+}
+
+function buildTreeOption() {
+  return {
+    tooltip: buildTooltip(),
+    series: [
+      {
+        type: "tree",
+        data: [treeData],
+        top: "8%",
+        left: "8%",
+        bottom: "8%",
+        right: "8%",
+        layout: "radial",
+        symbol: "emptyCircle",
+        expandAndCollapse: false,
+        initialTreeDepth: 3,
+        animationDurationUpdate: 750,
+        roam: true,
+        emphasis: {
+          focus: "descendant"
+        },
+        lineStyle: {
+          color: "#bcc9da",
+          width: 1.4,
+          curveness: 0.35
+        },
         label: {
           position: "rotate",
           verticalAlign: "middle",
-          align: "left",
-          fontSize: 12,
+          align: "right",
+          fontSize: 13,
           color: "#2f455b"
-        }
-      },
-      levels: [
-        {
-          itemStyle: {
-            color: "#555555",
-            borderColor: "#555555",
-            borderWidth: 3
-          },
+        },
+        leaves: {
           label: {
-            show: true,
-            position: "inside",
-            align: "center",
+            position: "rotate",
             verticalAlign: "middle",
-            fontSize: 14,
-            fontWeight: 700,
+            align: "left",
+            fontSize: 12,
+            color: "#2f455b"
+          }
+        }
+      }
+    ]
+  };
+}
+
+function buildTreemapOption() {
+  return {
+    tooltip: buildTooltip(),
+    series: [
+      {
+        type: "treemap",
+        data: [treemapData],
+        roam: false,
+        nodeClick: false,
+        sort: false,
+        top: 8,
+        left: 8,
+        right: 8,
+        bottom: 34,
+        breadcrumb: {
+          show: true,
+          bottom: 4,
+          height: 20,
+          itemStyle: {
+            color: "#676767",
+            borderColor: "#ffffff",
+            borderWidth: 1
+          },
+          textStyle: {
             color: "#ffffff"
           }
         },
-        {
-          itemStyle: {
-            color: "#52ab80",
-            borderColor: "#52ab80",
-            borderWidth: 2.4
-          },
-          label: {
-            show: true
-          }
+        label: {
+          show: false,
+          color: "#ffffff",
+          fontSize: 14,
+          formatter: "{b}"
         },
-        {
-          itemStyle: {
-            color: "#e8aa63",
-            borderColor: "#e8aa63",
-            borderWidth: 2
+        upperLabel: {
+          show: false
+        },
+        itemStyle: {
+          borderColor: TREEMAP_BORDER,
+          borderWidth: 2,
+          gapWidth: 2,
+          borderRadius: 0
+        },
+        levels: [
+          {
+            itemStyle: {
+              borderColor: "#ffffff",
+              borderWidth: 0,
+              gapWidth: 0
+            },
+            upperLabel: {
+              show: true,
+              color: "#343434",
+              height: 18
+            }
           },
-          label: {
-            show: true
+          {
+            itemStyle: {
+              color: TREEMAP_FILL,
+              borderColor: TREEMAP_BORDER,
+              borderWidth: 3,
+              gapWidth: 3,
+              borderRadius: 0
+            },
+            upperLabel: {
+              show: true,
+              color: TREEMAP_BORDER,
+              height: 18
+            }
+          },
+          {
+            itemStyle: {
+              color: TREEMAP_FILL,
+              borderColor: TREEMAP_BORDER,
+              borderWidth: 2,
+              gapWidth: 2,
+              borderRadius: 0
+            },
+            label: {
+              show: true,
+              color: "#ffffff",
+              position: "inside",
+              fontSize: 13,
+              fontWeight: 600,
+              align: "center",
+              verticalAlign: "middle"
+            }
+          },
+          {
+            itemStyle: {
+              color: TREEMAP_FILL,
+              borderColor: TREEMAP_BORDER,
+              borderWidth: 2,
+              gapWidth: 2,
+              borderRadius: 0
+            },
+            label: {
+              show: true,
+              color: "#ffffff",
+              position: "inside",
+              fontSize: 13,
+              fontWeight: 600,
+              align: "center",
+              verticalAlign: "middle"
+            }
           }
-        }
-      ]
-    }
-  ]
-};
+        ]
+      }
+    ]
+  };
+}
 
-chart.setOption(option);
+function syncTabs() {
+  tabs.forEach(tab => {
+    const isActive = tab.dataset.view === activeView;
+    tab.classList.toggle("is-active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+  });
+}
+
+function renderChart(view = activeView) {
+  activeView = view;
+  chart.clear();
+  chart.setOption(activeView === "tree" ? buildTreeOption() : buildTreemapOption(), true);
+  syncTabs();
+}
+
+tabs.forEach(tab => {
+  tab.addEventListener("click", () => renderChart(tab.dataset.view));
+});
+
+renderChart("tree");
+
 window.addEventListener("resize", () => chart.resize());
