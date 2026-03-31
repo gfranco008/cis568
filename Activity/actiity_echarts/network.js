@@ -143,50 +143,8 @@ const treemapData = toTreemapNode(hierarchy);
 
 const chart = echarts.init(document.getElementById("chart-view"));
 const tabs = Array.from(document.querySelectorAll(".tab"));
-const breadcrumbEl = document.getElementById("hover-breadcrumb");
 let activeView = "tree";
-
-function buildPathMap(root) {
-  const pathMap = new Map();
-
-  function visit(node, path) {
-    const nextPath = [...path, node.name];
-    pathMap.set(node.name, nextPath);
-    node.children.forEach(child => visit(child, nextPath));
-  }
-
-  visit(root, []);
-  return pathMap;
-}
-
-const pathMap = buildPathMap(hierarchy);
-
-function updateBreadcrumb(nodeName = hierarchy.name) {
-  const path = pathMap.get(nodeName) || [hierarchy.name];
-  breadcrumbEl.replaceChildren();
-
-  path.forEach((segment, index) => {
-    if (index > 0) {
-      const separator = document.createElement("span");
-      separator.className = "breadcrumb-sep";
-      breadcrumbEl.appendChild(separator);
-    }
-
-    const chip = document.createElement("span");
-    chip.className = "breadcrumb-chip";
-    chip.textContent = segment;
-    breadcrumbEl.appendChild(chip);
-  });
-}
-
-function syncBreadcrumb() {
-  const showBreadcrumb = activeView === "treemap";
-  breadcrumbEl.classList.toggle("is-hidden", !showBreadcrumb);
-
-  if (showBreadcrumb) {
-    updateBreadcrumb();
-  }
-}
+let currentHoveredNode = null;
 
 function buildTooltip() {
   return {
@@ -370,28 +328,38 @@ function syncTabs() {
 
 function renderChart(view = activeView) {
   activeView = view;
+  currentHoveredNode = null;
   chart.clear();
   chart.setOption(activeView === "tree" ? buildTreeOption() : buildTreemapOption(), true);
   syncTabs();
-  syncBreadcrumb();
 }
 
 tabs.forEach(tab => {
   tab.addEventListener("click", () => renderChart(tab.dataset.view));
 });
 
-chart.on("mouseover", params => {
-  if (activeView !== "treemap" || params.seriesType !== "treemap" || !params.data?.name) {
-    return;
-  }
+// Navigate into a treemap node (updates the native breadcrumb)
+function treemapGoTo(nodeId) {
+  chart.dispatchAction({ type: "treemapRootToNode", seriesIndex: 0, targetNodeId: nodeId });
+}
 
-  updateBreadcrumb(params.data.name);
+chart.on("mouseover", params => {
+  if (activeView !== "treemap" || params.seriesType !== "treemap" || !params.data?.name) return;
+  if (currentHoveredNode === params.data.name) return;
+  currentHoveredNode = params.data.name;
+  treemapGoTo(params.data.name);
 });
 
-chart.on("globalout", () => {
-  if (activeView === "treemap") {
-    updateBreadcrumb();
-  }
+chart.on("mouseout", params => {
+  if (activeView !== "treemap" || params.seriesType !== "treemap") return;
+  currentHoveredNode = null;
+  treemapGoTo(hierarchy.name); // reset breadcrumb to root on mouse-out
+});
+
+chart.on("click", params => {
+  if (activeView !== "treemap" || params.seriesType !== "treemap" || !params.data?.name) return;
+  currentHoveredNode = params.data.name;
+  treemapGoTo(params.data.name);
 });
 
 renderChart("tree");
