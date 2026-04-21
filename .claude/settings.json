@@ -5,7 +5,10 @@
       "Bash(ffmpeg -i /Users/gfranco/Documents/cis568/data/network.mp4 -vframes 3 -ss 00:00:02 /tmp/net_frame_%02d.png)",
       "Read(//tmp/**)",
       "Read(//private/tmp/**)",
-      "Bash(python3 -:*)"
+      "Bash(python3 -:*)",
+      "Bash(grep -v \"^0$\" /Users/gfranco/Documents/cis568/Activity/assignment_4/Data_CT.csv)",
+      "Bash(python3 -c \"print\\(512*512\\)\")",
+      "Bash(python3 -m http.server 8000)"
     ]
   }
 }

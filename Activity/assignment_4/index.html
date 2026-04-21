@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CT Scan Heatmap</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: sans-serif;
+            background-color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #fff;
+        }
+        #controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        label {
+            font-size: 14px;
+        }
+        #bin-slider {
+            width: 200px;
+        }
+        #bin-display {
+            font-weight: bold;
+            min-width: 50px;
+        }
+        #ct-svg {
+            border: 1px solid #444;
+            background-color: #000;
+        }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>CT Scan Heatmap Visualization</h1>
+    <div id="controls">
+        <label>Bin Count: <span id="bin-display">100</span></label>
+        <input type="range" id="bin-slider" min="10" max="500" value="100" step="10">
+    </div>
+    <svg id="ct-svg" viewBox="0 0 512 512" style="width: 70vw; max-width: 600px;"></svg>
+
+    <script>
+        const min = 0, mid = 1512, max = 3024;
+        const m = 512, n = 512;
+        const svg = d3.select("#ct-svg");
+        const path = d3.geoPath();
+
+        const colorScale = d3.scaleDiverging()
+            .domain([min, mid, max])
+            .interpolator(d3.interpolateRdBu);
+
+        let values_CT = [];
+
+        function drawContours(bin_counts) {
+            svg.selectAll("g.contours").remove();
+
+            const contours = d3.contours()
+                .size([m, n])
+                .thresholds(d3.range(min, max, bin_counts))
+                (values_CT);
+
+            svg.append("g")
+                .attr("class", "contours")
+                .selectAll("path")
+                .data(contours)
+                .enter()
+                .append("path")
+                .attr("d", d => path(d))
+                .attr("stroke", "black")
+                .attr("stroke-width", "0.3px")
+                .attr("stroke-linejoin", "round")
+                .attr("fill", d => colorScale(d.value));
+        }
+
+        d3.csv('./Data_CT.csv').then(data => {
+            data.forEach(d => values_CT.push(+d[0]));
+            drawContours(100);
+        });
+
+        document.getElementById("bin-slider").addEventListener("input", function() {
+            document.getElementById("bin-display").textContent = this.value;
+            drawContours(+this.value);
+        });
+    </script>
+</body>
+</html>
