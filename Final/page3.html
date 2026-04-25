@@ -153,10 +153,10 @@
         g.append('g').attr('class','axis')
             .call(d3.axisLeft(ySc).ticks(8));
         g.append('text').attr('class','axis-label').attr('text-anchor','middle')
-            .attr('x', PW/2).attr('y', PH+40).text('y  (position)');
+            .attr('x', PW/2).attr('y', PH+40).text('x  (position)');
         g.append('text').attr('class','axis-label').attr('text-anchor','middle')
             .attr('transform','rotate(-90)').attr('x', -PH/2).attr('y', -50)
-            .text("y'  (velocity)");
+            .text("x'  (velocity)");
         // Crosshairs
         g.append('line').attr('class','crosshair')
             .attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',PH);
@@ -259,18 +259,41 @@
         resetFor(1.0);
     </script>
 
-    <div class="modal-overlay" id="info-modal">
+    <div class="modal-overlay" id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" aria-hidden="true">
         <div class="modal-box">
             <button class="modal-close" id="modal-close">&times;</button>
-            <h2>The Limit Cycle as a Global Attractor</h2>
+            <h2 id="info-modal-title">The Limit Cycle as a Global Attractor</h2>
             <p>Eight trajectories are launched from very different starting points — four inside the limit cycle (spiraling outward) and four outside (spiraling inward). Dashed circles mark each initial position; colored dots track the current location in real time. Despite the radically different starting points, all eight paths converge to the same closed curve.</p>
             <p><strong>Research significance:</strong> The Van der Pol limit cycle is a <strong>global attractor</strong> — every trajectory except the unstable equilibrium at the origin is drawn to it, regardless of initial energy or position. This robustness distinguishes nonlinear self-sustained oscillators from conservative systems where motion depends entirely on initial conditions. Demonstrating global attraction numerically supports theoretical claims about solution robustness across parameter regimes.</p>
         </div>
     </div>
     <script>
-        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
-        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
-        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+        (() => {
+            const overlay = document.getElementById('info-modal');
+            const openBtn = document.querySelector('.info-btn');
+            const closeBtn = document.getElementById('modal-close');
+            let lastFocus = null;
+
+            function openModal() {
+                lastFocus = document.activeElement;
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                closeBtn.focus();
+            }
+
+            function closeModal() {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+            }
+
+            openBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            overlay.addEventListener('click', e => { if (e.target.id === 'info-modal') closeModal(); });
+            window.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.classList.contains('active')) closeModal();
+            });
+        })();
     </script>
 </body>
 </html>

@@ -275,18 +275,41 @@
         });
     </script>
 
-    <div class="modal-overlay" id="info-modal">
+    <div class="modal-overlay" id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" aria-hidden="true">
         <div class="modal-box">
             <button class="modal-close" id="modal-close">&times;</button>
-            <h2>Quantitative Properties of the Limit Cycle vs. μ</h2>
+            <h2 id="info-modal-title">Quantitative Properties of the Limit Cycle vs. μ</h2>
             <p>Each point is computed by running a full RK4 integration for that μ (60 s total, first 30 s discarded as transient). <strong>Amplitude</strong> is max |x| on the limit cycle. <strong>Period</strong> is the average time between successive positive zero-crossings of x(t). The dashed 2π line marks the harmonic-oscillator period. Drag the slider to read off exact values at any μ.</p>
             <p><strong>Research significance:</strong> These charts validate numerical results against known asymptotics: for small μ, T ≈ 2π (linear period); for large μ, T ≈ (3 − 2 ln 2)μ (relaxation-oscillator formula). The near-constant amplitude (~2 for all μ) is itself a non-obvious result of the nonlinear self-limiting mechanism. Confirming both trends numerically is a standard verification step when studying parametric ODEs, and helps calibrate integration parameters — step size and transient length — for a given μ range.</p>
         </div>
     </div>
     <script>
-        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
-        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
-        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+        (() => {
+            const overlay = document.getElementById('info-modal');
+            const openBtn = document.querySelector('.info-btn');
+            const closeBtn = document.getElementById('modal-close');
+            let lastFocus = null;
+
+            function openModal() {
+                lastFocus = document.activeElement;
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                closeBtn.focus();
+            }
+
+            function closeModal() {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+            }
+
+            openBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            overlay.addEventListener('click', e => { if (e.target.id === 'info-modal') closeModal(); });
+            window.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.classList.contains('active')) closeModal();
+            });
+        })();
     </script>
 </body>
 </html>

@@ -56,6 +56,12 @@
         input[type=range] { cursor: pointer; }
         #n-slider { width: 220px; }
         #t-slider { width: 220px; }
+        .method-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
         #n-display, #t-display {
             font-weight: bold;
             min-width: 42px;
@@ -204,6 +210,9 @@
 
         <label>N = <span id="n-display">21</span></label>
         <input id="n-slider" type="range" min="5" max="41" step="2" value="21">
+
+        <label class="method-toggle"><input type="checkbox" id="show-equi" checked> Equispaced</label>
+        <label class="method-toggle"><input type="checkbox" id="show-cheb" checked> Chebyshev</label>
 
         <span id="status">Precomputing trajectories...</span>
     </div>
@@ -475,6 +484,8 @@
         const stateSelect = document.getElementById('state-select');
         const nDisplay = document.getElementById('n-display');
         const tDisplay = document.getElementById('t-display');
+        const showEqui = document.getElementById('show-equi');
+        const showCheb = document.getElementById('show-cheb');
         const statusEl = document.getElementById('status');
 
         const PLAY_INTERVAL_MS = 260;
@@ -487,6 +498,8 @@
             tSlider.disabled = !enabled;
             playBtn.disabled = !enabled;
             stateSelect.disabled = !enabled;
+            showEqui.disabled = !enabled;
+            showCheb.disabled = !enabled;
         }
 
         function truthAt(stateKey, idx) {
@@ -540,13 +553,35 @@
 
         let currentAnalysis = null;
         const analysisCache = new Map();
+        const ANALYSIS_CACHE_LIMIT = 140;
         let recomputeToken = 0;
+
+        function setAnalysisCache(key, value) {
+            if (analysisCache.has(key)) analysisCache.delete(key);
+            analysisCache.set(key, value);
+            if (analysisCache.size > ANALYSIS_CACHE_LIMIT) {
+                const oldestKey = analysisCache.keys().next().value;
+                analysisCache.delete(oldestKey);
+            }
+        }
+
+        function applyMethodVisibility() {
+            const equiVisible = showEqui.checked;
+            const chebVisible = showCheb.checked;
+
+            [snapEquiPath, errEquiPath, convEquiPath, timeEquiPath, convEquiDot, timeEquiDot, snapEquiNodes]
+                .forEach(sel => sel.attr('display', equiVisible ? null : 'none'));
+            [snapChebPath, errChebPath, convChebPath, timeChebPath, convChebDot, timeChebDot, snapChebNodes]
+                .forEach(sel => sel.attr('display', chebVisible ? null : 'none'));
+        }
 
         function render() {
             if (!currentAnalysis) return;
 
             const N = +nSlider.value;
             const tVal = +tSlider.value;
+            const equiVisible = showEqui.checked;
+            const chebVisible = showCheb.checked;
             const selected = currentAnalysis.byN.get(N);
             if (!selected) return;
 
@@ -558,8 +593,12 @@
             const xMu = d3.scaleLinear().domain([MU_MIN, MU_MAX]).range([0, PW]);
 
             // Snapshot chart
-            const yMin = min([...truth, ...equi.pred, ...cheb.pred]);
-            const yMax = max([...truth, ...equi.pred, ...cheb.pred]);
+            const snapSeries = [truth];
+            if (equiVisible) snapSeries.push(equi.pred);
+            if (chebVisible) snapSeries.push(cheb.pred);
+            const snapVals = [].concat(...snapSeries);
+            const yMin = min(snapVals);
+            const yMax = max(snapVals);
             const yPad = (yMax - yMin) * 0.14 || 0.2;
             const ySnap = d3.scaleLinear().domain([yMin - yPad, yMax + yPad]).range([PH, 0]).nice();
 
@@ -592,8 +631,12 @@
                 .attr('opacity', 0.95);
 
             // Error chart
-            const errMin = Math.max(1e-15, Math.min(min(equi.err), min(cheb.err)) * 0.7);
-            const errMax = Math.max(1e-12, Math.max(max(equi.err), max(cheb.err)) * 1.3);
+            const errSeries = [];
+            if (equiVisible) errSeries.push(equi.err);
+            if (chebVisible) errSeries.push(cheb.err);
+            const errVals = errSeries.length ? [].concat(...errSeries) : [];
+            const errMin = errVals.length ? Math.max(1e-15, min(errVals) * 0.7) : 1e-15;
+            const errMax = errVals.length ? Math.max(1e-12, max(errVals) * 1.3) : 1;
             const yErr = d3.scaleLog().domain([errMin, errMax]).range([PH, 0]);
             updateAxes(errChart, xMu, yErr, 6, 6, d3.format('.0e'));
 
@@ -603,8 +646,12 @@
 
             // Convergence chart
             const xN = d3.scaleLinear().domain([N_LIST[0], N_LIST[N_LIST.length - 1]]).range([0, PW]);
-            const convMin = Math.max(1e-15, Math.min(d3.min(rows, d => d.equiMax), d3.min(rows, d => d.chebMax)) * 0.7);
-            const convMax = Math.max(1e-12, Math.max(d3.max(rows, d => d.equiMax), d3.max(rows, d => d.chebMax)) * 1.3);
+            const convSeries = [];
+            if (equiVisible) convSeries.push(rows.map(d => d.equiMax));
+            if (chebVisible) convSeries.push(rows.map(d => d.chebMax));
+            const convVals = convSeries.length ? [].concat(...convSeries) : [];
+            const convMin = convVals.length ? Math.max(1e-15, min(convVals) * 0.7) : 1e-15;
+            const convMax = convVals.length ? Math.max(1e-12, max(convVals) * 1.3) : 1;
             const yConv = d3.scaleLog().domain([convMin, convMax]).range([PH, 0]);
             updateAxes(convChart, xN, yConv, 8, 6, d3.format('.0e'));
 
@@ -622,7 +669,11 @@
 
             // Runtime chart
             const tMin = 0;
-            const tMax = Math.max(d3.max(rows, d => d.equiMs), d3.max(rows, d => d.chebMs)) * 1.2 + 0.001;
+            const timeSeries = [];
+            if (equiVisible) timeSeries.push(rows.map(d => d.equiMs));
+            if (chebVisible) timeSeries.push(rows.map(d => d.chebMs));
+            const timeVals = timeSeries.length ? [].concat(...timeSeries) : [];
+            const tMax = (timeVals.length ? max(timeVals) : 0.5) * 1.2 + 0.001;
             const yTime = d3.scaleLinear().domain([tMin, tMax]).range([PH, 0]).nice();
             updateAxes(timeChart, xN, yTime, 8, 6);
 
@@ -648,6 +699,7 @@
 
             nDisplay.textContent = `${N}`;
             tDisplay.textContent = tVal.toFixed(1);
+            applyMethodVisibility();
         }
 
         function recomputeAndRender() {
@@ -671,7 +723,7 @@
             setTimeout(() => {
                 if (token !== recomputeToken) return;
                 currentAnalysis = computeAnalysis(stateKey, idx);
-                analysisCache.set(cacheKey, currentAnalysis);
+                setAnalysisCache(cacheKey, currentAnalysis);
                 render();
                 isComputing = false;
                 statusEl.textContent = isPlaying ? 'Playing t*...' : '';
@@ -754,6 +806,9 @@
             recomputeAndRender();
         });
 
+        showEqui.addEventListener('change', render);
+        showCheb.addEventListener('change', render);
+
         playBtn.addEventListener('click', () => {
             if (isPlaying) {
                 stopPlayback();
@@ -773,19 +828,42 @@
         });
     </script>
 
-    <div class="modal-overlay" id="info-modal">
+    <div class="modal-overlay" id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" aria-hidden="true">
         <div class="modal-box">
             <button class="modal-close" id="modal-close">&times;</button>
-            <h2>Why This Page Matters for the Thesis</h2>
+            <h2 id="info-modal-title">Why This Page Matters for the Thesis</h2>
             <p>Your core question is not only trajectory behavior at a fixed μ, but also how accurately we can <strong>predict across μ</strong> from a limited set of training parameter samples. This page fixes time t* and treats the state as a function of μ, then builds barycentric surrogates from N training nodes.</p>
             <p>By comparing <strong>equispaced vs Chebyshev μ nodes</strong>, you can see where node placement changes the error profile over the parameter domain. The convergence panel quantifies error decay as N increases, and the runtime panel shows computational cost, so the method can be judged on both accuracy and efficiency.</p>
             <p><strong>Research significance:</strong> this is the operational view used in your surrogate workflow: select μ training points, interpolate parametric ODE outputs, and evaluate error/cost tradeoffs before downstream tasks such as emulator design and model comparison.</p>
         </div>
     </div>
     <script>
-        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
-        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
-        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+        (() => {
+            const overlay = document.getElementById('info-modal');
+            const openBtn = document.querySelector('.info-btn');
+            const closeBtn = document.getElementById('modal-close');
+            let lastFocus = null;
+
+            function openModal() {
+                lastFocus = document.activeElement;
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                closeBtn.focus();
+            }
+
+            function closeModal() {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+            }
+
+            openBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            overlay.addEventListener('click', e => { if (e.target.id === 'info-modal') closeModal(); });
+            window.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.classList.contains('active')) closeModal();
+            });
+        })();
     </script>
 </body>
 </html>

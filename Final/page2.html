@@ -158,7 +158,7 @@
 
     <div id="charts">
         <div class="chart-panel">
-            <h2>Phase Portrait &nbsp;(y vs y')</h2>
+            <h2>Phase Portrait &nbsp;(x vs x')</h2>
             <div id="phase-container"></div>
         </div>
         <div class="chart-panel">
@@ -170,8 +170,8 @@
     <script>
         // ── Constants ────────────────────────────────────────────────────────────
         const H       = 0.02;
-        const T_MAX   = 50;          // integrate to t=20 (visible window)
-        const N_STEPS = T_MAX / H;   // 1000 steps
+        const T_MAX   = 50;          // integrate to t=50 (visible window)
+        const N_STEPS = T_MAX / H;   // 2500 steps
         const SPEED   = 4;           // steps advanced per animation frame
         const X0      = 0.5, Y0 = 0; // initial conditions (inside limit cycle)
 
@@ -280,7 +280,7 @@
         const phaseLine   = d3.line().x(d => phaseXScale(d[0])).y(d => phaseYScale(d[1]));
         const phaseG = buildChart('phase-container');
         addGrid(phaseG, phaseXScale, phaseYScale, 6, 6);
-        addAxes(phaseG, phaseXScale, phaseYScale, 6, 6, 'y', "y'");
+        addAxes(phaseG, phaseXScale, phaseYScale, 6, 6, 'x', "x'");
         addCrosshair(phaseG, phaseXScale, phaseYScale);
 
         // Faint limit cycle in background
@@ -418,18 +418,41 @@
         resetFor(getMu());
     </script>
 
-    <div class="modal-overlay" id="info-modal">
+    <div class="modal-overlay" id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" aria-hidden="true">
         <div class="modal-box">
             <button class="modal-close" id="modal-close">&times;</button>
-            <h2>Time Evolution from an Initial Condition</h2>
+            <h2 id="info-modal-title">Time Evolution from an Initial Condition</h2>
             <p>Starting from x(0) = 0.5, x′(0) = 0 — a point <em>inside</em> the limit cycle — the trajectory spirals outward and gradually settles onto the closed limit cycle. The faint dashed curve shows the reference limit cycle. Changing μ restarts the simulation and reshapes the attractor; the time scrubber lets you pause at any moment.</p>
             <p><strong>Research significance:</strong> Transient dynamics reveal how quickly a system converges to steady state. For small μ convergence is slow (weak effective damping); for large μ it is rapid. Characterizing this timescale is essential for ODE solver validation and for understanding how fast a parametric system "forgets" its initial conditions — a key question in stability and sensitivity analysis.</p>
         </div>
     </div>
     <script>
-        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
-        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
-        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+        (() => {
+            const overlay = document.getElementById('info-modal');
+            const openBtn = document.querySelector('.info-btn');
+            const closeBtn = document.getElementById('modal-close');
+            let lastFocus = null;
+
+            function openModal() {
+                lastFocus = document.activeElement;
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                closeBtn.focus();
+            }
+
+            function closeModal() {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+            }
+
+            openBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            overlay.addEventListener('click', e => { if (e.target.id === 'info-modal') closeModal(); });
+            window.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.classList.contains('active')) closeModal();
+            });
+        })();
     </script>
 </body>
 </html>

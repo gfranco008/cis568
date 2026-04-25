@@ -56,6 +56,12 @@
         input[type=range] { cursor: pointer; }
         #mu-slider { width: 210px; }
         #n-slider { width: 200px; }
+        .method-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+        }
         #mu-display, #n-display {
             font-weight: bold;
             min-width: 36px;
@@ -206,6 +212,9 @@
             <option value="18">last 18 time units</option>
         </select>
 
+        <label class="method-toggle"><input type="checkbox" id="show-equi" checked> Equispaced</label>
+        <label class="method-toggle"><input type="checkbox" id="show-cheb" checked> Chebyshev</label>
+
         <span id="status"></span>
     </div>
 
@@ -227,7 +236,7 @@
             <div id="velerr-container"></div>
         </div>
         <div class="chart-panel wide">
-            <h2>Convergence: max error over degree n</h2>
+            <h2>Convergence: max error over degree n (solid: x(t), dashed: x'(t))</h2>
             <div id="conv-container"></div>
         </div>
     </div>
@@ -238,6 +247,7 @@
         <span class="legend-item"><span class="swatch" style="background:#2ec4b6"></span>Chebyshev barycentric</span>
         <span class="legend-item"><span class="node-swatch" style="background:#ff6b6b"></span>Equispaced nodes</span>
         <span class="legend-item"><span class="node-swatch" style="background:#2ec4b6"></span>Chebyshev nodes</span>
+        <span class="legend-item"><span class="swatch" style="background:#666"></span>Convergence chart: solid = x(t), dashed = x'(t)</span>
     </div>
 
     <div id="metrics">
@@ -248,8 +258,10 @@
         <span>max error x'(t) (equispaced): <strong id="max-equi-v">-</strong></span>
         <span>max error x'(t) (Chebyshev): <strong id="max-cheb-v">-</strong></span>
         <span>ratio x'(t) (equi/cheb): <strong id="ratio-text-v">-</strong></span>
-        <span>tail slope log10(error)/n (equi): <strong id="slope-equi">-</strong></span>
-        <span>tail slope log10(error)/n (cheb): <strong id="slope-cheb">-</strong></span>
+        <span>tail slope x(t) log10(error)/n (equi): <strong id="slope-equi">-</strong></span>
+        <span>tail slope x(t) log10(error)/n (cheb): <strong id="slope-cheb">-</strong></span>
+        <span>tail slope x'(t) log10(error)/n (equi): <strong id="slope-equi-v">-</strong></span>
+        <span>tail slope x'(t) log10(error)/n (cheb): <strong id="slope-cheb-v">-</strong></span>
     </div>
 
     <script>
@@ -511,7 +523,8 @@
 
         function computeConvergence(ref, t0, t1) {
             const denseT = linspace(t0, t1, DENSE_COUNT);
-            const truth = denseT.map(t => sampleRef(ref, t));
+            const truthX = denseT.map(t => sampleRef(ref, t, 'x'));
+            const truthV = denseT.map(t => sampleRef(ref, t, 'v'));
             const eps = (t1 - t0) * 1e-13;
 
             const rows = [];
@@ -519,8 +532,10 @@
             for (let n = N_MIN; n <= N_MAX; n++) {
                 const eqNodes = equispacedNodes(n, t0, t1);
                 const chNodes = chebLobattoNodes(n, t0, t1);
-                const eqVals = eqNodes.map(t => sampleRef(ref, t));
-                const chVals = chNodes.map(t => sampleRef(ref, t));
+                const eqVals = eqNodes.map(t => sampleRef(ref, t, 'x'));
+                const chVals = chNodes.map(t => sampleRef(ref, t, 'x'));
+                const eqValsVel = eqNodes.map(t => sampleRef(ref, t, 'v'));
+                const chValsVel = chNodes.map(t => sampleRef(ref, t, 'v'));
                 const eqW = baryWeights(eqNodes);
                 const chW = baryWeights(chNodes);
 
@@ -528,18 +543,29 @@
                 let chMax = 0;
                 let eqSq = 0;
                 let chSq = 0;
+                let eqMaxVel = 0;
+                let chMaxVel = 0;
+                let eqSqVel = 0;
+                let chSqVel = 0;
 
                 for (let i = 0; i < denseT.length; i++) {
                     const t = denseT[i];
-                    const fx = truth[i];
+                    const fx = truthX[i];
+                    const fv = truthV[i];
 
                     const ee = Math.abs(fx - baryEval(t, eqNodes, eqVals, eqW, eps));
                     const ec = Math.abs(fx - baryEval(t, chNodes, chVals, chW, eps));
+                    const eev = Math.abs(fv - baryEval(t, eqNodes, eqValsVel, eqW, eps));
+                    const ecv = Math.abs(fv - baryEval(t, chNodes, chValsVel, chW, eps));
 
                     eqMax = Math.max(eqMax, ee);
                     chMax = Math.max(chMax, ec);
                     eqSq += ee * ee;
                     chSq += ec * ec;
+                    eqMaxVel = Math.max(eqMaxVel, eev);
+                    chMaxVel = Math.max(chMaxVel, ecv);
+                    eqSqVel += eev * eev;
+                    chSqVel += ecv * ecv;
                 }
 
                 rows.push({
@@ -547,7 +573,11 @@
                     eqMax: Math.max(eqMax, 1e-15),
                     chMax: Math.max(chMax, 1e-15),
                     eqRms: Math.max(Math.sqrt(eqSq / denseT.length), 1e-15),
-                    chRms: Math.max(Math.sqrt(chSq / denseT.length), 1e-15)
+                    chRms: Math.max(Math.sqrt(chSq / denseT.length), 1e-15),
+                    eqMaxVel: Math.max(eqMaxVel, 1e-15),
+                    chMaxVel: Math.max(chMaxVel, 1e-15),
+                    eqRmsVel: Math.max(Math.sqrt(eqSqVel / denseT.length), 1e-15),
+                    chRmsVel: Math.max(Math.sqrt(chSqVel / denseT.length), 1e-15)
                 });
             }
 
@@ -648,12 +678,24 @@
 
         const convEqPath = convChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.equi).attr('stroke-width', 2.5);
         const convChPath = convChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.cheb).attr('stroke-width', 2.5);
+        const convEqVelPath = convChart.g.append('path')
+            .attr('fill', 'none')
+            .attr('stroke', COLORS.equi)
+            .attr('stroke-width', 2)
+            .attr('stroke-dasharray', '6,3');
+        const convChVelPath = convChart.g.append('path')
+            .attr('fill', 'none')
+            .attr('stroke', COLORS.cheb)
+            .attr('stroke-width', 2)
+            .attr('stroke-dasharray', '6,3');
         const convCursor = convChart.g.append('line')
             .attr('stroke', '#aaa')
             .attr('stroke-width', 1)
             .attr('stroke-dasharray', '4,3');
         const convEqDot = convChart.g.append('circle').attr('r', 5).attr('fill', COLORS.equi).attr('stroke', '#111').attr('stroke-width', 1.2);
         const convChDot = convChart.g.append('circle').attr('r', 5).attr('fill', COLORS.cheb).attr('stroke', '#111').attr('stroke-width', 1.2);
+        const convEqVelDot = convChart.g.append('circle').attr('r', 4).attr('fill', '#111').attr('stroke', COLORS.equi).attr('stroke-width', 1.6);
+        const convChVelDot = convChart.g.append('circle').attr('r', 4).attr('fill', '#111').attr('stroke', COLORS.cheb).attr('stroke-width', 1.6);
 
         const muSlider = document.getElementById('mu-slider');
         const muDisplay = document.getElementById('mu-display');
@@ -661,9 +703,28 @@
         const nSlider = document.getElementById('n-slider');
         const nDisplay = document.getElementById('n-display');
         const windowSelect = document.getElementById('window-select');
+        const showEqui = document.getElementById('show-equi');
+        const showCheb = document.getElementById('show-cheb');
         const statusEl = document.getElementById('status');
 
         let redrawToken = 0;
+
+        function applyMethodVisibility() {
+            const equiVisible = showEqui.checked;
+            const chebVisible = showCheb.checked;
+
+            [
+                curveEqPath, errEqPath, velEqPath, velErrEqPath,
+                convEqPath, convEqVelPath, convEqDot, convEqVelDot,
+                eqNodesLayer, eqVelNodesLayer
+            ].forEach(sel => sel.attr('display', equiVisible ? null : 'none'));
+
+            [
+                curveChPath, errChPath, velChPath, velErrChPath,
+                convChPath, convChVelPath, convChDot, convChVelDot,
+                chNodesLayer, chVelNodesLayer
+            ].forEach(sel => sel.attr('display', chebVisible ? null : 'none'));
+        }
 
         function setMetrics(single, convRows, t0, t1) {
             const n = +nSlider.value;
@@ -680,14 +741,20 @@
 
             const sEq = tailSlope(convRows, 'eqMax');
             const sCh = tailSlope(convRows, 'chMax');
+            const sEqV = tailSlope(convRows, 'eqMaxVel');
+            const sChV = tailSlope(convRows, 'chMaxVel');
             document.getElementById('slope-equi').textContent = Number.isFinite(sEq) ? sEq.toFixed(3) : '-';
             document.getElementById('slope-cheb').textContent = Number.isFinite(sCh) ? sCh.toFixed(3) : '-';
+            document.getElementById('slope-equi-v').textContent = Number.isFinite(sEqV) ? sEqV.toFixed(3) : '-';
+            document.getElementById('slope-cheb-v').textContent = Number.isFinite(sChV) ? sChV.toFixed(3) : '-';
         }
 
         function redraw() {
             const mu = quantizeMu(+muSlider.value);
             const n = +nSlider.value;
             const w = +windowSelect.value;
+            const equiVisible = showEqui.checked;
+            const chebVisible = showCheb.checked;
 
             const t1 = T_TOTAL;
             const t0 = Math.max(T_SKIP, t1 - w);
@@ -702,8 +769,12 @@
 
             // Chart 1: truth + interpolants
             const xScCurve = d3.scaleLinear().domain([t0, t1]).range([0, curveChart.PW]);
-            const yMinCurve = minOf([...single.truth, ...single.eqInterp, ...single.chInterp]);
-            const yMaxCurve = maxOf([...single.truth, ...single.eqInterp, ...single.chInterp]);
+            const curveSeries = [single.truth];
+            if (equiVisible) curveSeries.push(single.eqInterp);
+            if (chebVisible) curveSeries.push(single.chInterp);
+            const curveVals = [].concat(...curveSeries);
+            const yMinCurve = minOf(curveVals);
+            const yMaxCurve = maxOf(curveVals);
             const yPadCurve = (yMaxCurve - yMinCurve) * 0.12 || 0.2;
             const yScCurve = d3.scaleLinear().domain([yMinCurve - yPadCurve, yMaxCurve + yPadCurve]).range([curveChart.PH, 0]).nice();
 
@@ -737,8 +808,12 @@
 
             // Chart 2: pointwise error
             const xScErr = d3.scaleLinear().domain([t0, t1]).range([0, errorChart.PW]);
-            const errMin = Math.max(1e-15, Math.min(minOf(single.eqErr), minOf(single.chErr)) * 0.7);
-            const errMax = Math.max(1e-12, Math.max(maxOf(single.eqErr), maxOf(single.chErr)) * 1.3);
+            const errSeries = [];
+            if (equiVisible) errSeries.push(single.eqErr);
+            if (chebVisible) errSeries.push(single.chErr);
+            const errVals = errSeries.length ? [].concat(...errSeries) : [];
+            const errMin = errVals.length ? Math.max(1e-15, minOf(errVals) * 0.7) : 1e-15;
+            const errMax = errVals.length ? Math.max(1e-12, maxOf(errVals) * 1.3) : 1;
             const yScErr = d3.scaleLog().domain([errMin, errMax]).range([errorChart.PH, 0]);
 
             updateAxes(errorChart, xScErr, yScErr, 6, 6, d3.format('.0e'));
@@ -752,8 +827,12 @@
 
             // Chart 3: velocity truth + interpolants
             const xScVel = d3.scaleLinear().domain([t0, t1]).range([0, velChart.PW]);
-            const yMinVel = minOf([...single.truthVel, ...single.eqInterpVel, ...single.chInterpVel]);
-            const yMaxVel = maxOf([...single.truthVel, ...single.eqInterpVel, ...single.chInterpVel]);
+            const velSeries = [single.truthVel];
+            if (equiVisible) velSeries.push(single.eqInterpVel);
+            if (chebVisible) velSeries.push(single.chInterpVel);
+            const velVals = [].concat(...velSeries);
+            const yMinVel = minOf(velVals);
+            const yMaxVel = maxOf(velVals);
             const yPadVel = (yMaxVel - yMinVel) * 0.12 || 0.2;
             const yScVel = d3.scaleLinear().domain([yMinVel - yPadVel, yMaxVel + yPadVel]).range([velChart.PH, 0]).nice();
 
@@ -787,8 +866,12 @@
 
             // Chart 4: velocity error
             const xScVelErr = d3.scaleLinear().domain([t0, t1]).range([0, velErrChart.PW]);
-            const velErrMin = Math.max(1e-15, Math.min(minOf(single.eqErrVel), minOf(single.chErrVel)) * 0.7);
-            const velErrMax = Math.max(1e-12, Math.max(maxOf(single.eqErrVel), maxOf(single.chErrVel)) * 1.3);
+            const velErrSeries = [];
+            if (equiVisible) velErrSeries.push(single.eqErrVel);
+            if (chebVisible) velErrSeries.push(single.chErrVel);
+            const velErrVals = velErrSeries.length ? [].concat(...velErrSeries) : [];
+            const velErrMin = velErrVals.length ? Math.max(1e-15, minOf(velErrVals) * 0.7) : 1e-15;
+            const velErrMax = velErrVals.length ? Math.max(1e-12, maxOf(velErrVals) * 1.3) : 1;
             const yScVelErr = d3.scaleLog().domain([velErrMin, velErrMax]).range([velErrChart.PH, 0]);
 
             updateAxes(velErrChart, xScVelErr, yScVelErr, 6, 6, d3.format('.0e'));
@@ -802,8 +885,18 @@
 
             // Chart 5: convergence
             const nSc = d3.scaleLinear().domain([N_MIN, N_MAX]).range([0, convChart.PW]);
-            const convMin = Math.max(1e-15, Math.min(d3.min(convRows, d => d.eqMax), d3.min(convRows, d => d.chMax)) * 0.7);
-            const convMax = Math.max(1e-12, Math.max(d3.max(convRows, d => d.eqMax), d3.max(convRows, d => d.chMax)) * 1.3);
+            const convSeries = [];
+            if (equiVisible) {
+                convSeries.push(convRows.map(d => d.eqMax));
+                convSeries.push(convRows.map(d => d.eqMaxVel));
+            }
+            if (chebVisible) {
+                convSeries.push(convRows.map(d => d.chMax));
+                convSeries.push(convRows.map(d => d.chMaxVel));
+            }
+            const convVals = convSeries.length ? [].concat(...convSeries) : [];
+            const convMin = convVals.length ? Math.max(1e-15, minOf(convVals) * 0.7) : 1e-15;
+            const convMax = convVals.length ? Math.max(1e-12, maxOf(convVals) * 1.3) : 1;
             const convY = d3.scaleLog().domain([convMin, convMax]).range([convChart.PH, 0]);
 
             updateAxes(convChart, nSc, convY, 8, 6, d3.format('.0e'));
@@ -811,6 +904,8 @@
             const lineConv = d3.line().x(d => nSc(d.n)).y(d => convY(d.val));
             convEqPath.datum(convRows.map(d => ({ n: d.n, val: d.eqMax }))).attr('d', lineConv);
             convChPath.datum(convRows.map(d => ({ n: d.n, val: d.chMax }))).attr('d', lineConv);
+            convEqVelPath.datum(convRows.map(d => ({ n: d.n, val: d.eqMaxVel }))).attr('d', lineConv);
+            convChVelPath.datum(convRows.map(d => ({ n: d.n, val: d.chMaxVel }))).attr('d', lineConv);
 
             const rowN = convRows.find(d => d.n === n);
             if (rowN) {
@@ -818,9 +913,12 @@
                 convCursor.attr('x1', cx).attr('x2', cx).attr('y1', 0).attr('y2', convChart.PH);
                 convEqDot.attr('cx', cx).attr('cy', convY(rowN.eqMax));
                 convChDot.attr('cx', cx).attr('cy', convY(rowN.chMax));
+                convEqVelDot.attr('cx', cx).attr('cy', convY(rowN.eqMaxVel));
+                convChVelDot.attr('cx', cx).attr('cy', convY(rowN.chMaxVel));
             }
 
             setMetrics(single, convRows, t0, t1);
+            applyMethodVisibility();
             statusEl.textContent = '';
         }
 
@@ -836,23 +934,48 @@
         muSlider.addEventListener('input', requestRedraw);
         nSlider.addEventListener('input', requestRedraw);
         windowSelect.addEventListener('change', requestRedraw);
+        showEqui.addEventListener('change', requestRedraw);
+        showCheb.addEventListener('change', requestRedraw);
 
         requestRedraw();
     </script>
 
-    <div class="modal-overlay" id="info-modal">
+    <div class="modal-overlay" id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" aria-hidden="true">
         <div class="modal-box">
             <button class="modal-close" id="modal-close">&times;</button>
-            <h2>Research Context: Why Chebyshev + Barycentric?</h2>
+            <h2 id="info-modal-title">Research Context: Why Chebyshev + Barycentric?</h2>
             <p>This page interpolates the Van der Pol trajectories x(t) and x'(t), not a toy function. The gray curves are high-resolution RK4 references on a post-transient time window, and the colored curves are degree-n barycentric interpolants built from sampled values of those trajectories.</p>
             <p><strong>Equispaced nodes</strong> tend to amplify boundary oscillations at higher n (Runge-type behavior), while <strong>Chebyshev-Lobatto nodes</strong> cluster near interval endpoints and typically reduce the worst-case interpolation error. Barycentric evaluation avoids explicitly solving Vandermonde systems, so it is the standard stable implementation for high-order interpolation.</p>
             <p><strong>Research significance:</strong> the convergence plot gives direct evidence of how node choice affects error decay as n increases for your Van der Pol data. This supports method selection when building polynomial surrogates used in downstream analysis, parameter studies, or reduced-order modeling workflows.</p>
         </div>
     </div>
     <script>
-        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
-        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
-        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+        (() => {
+            const overlay = document.getElementById('info-modal');
+            const openBtn = document.querySelector('.info-btn');
+            const closeBtn = document.getElementById('modal-close');
+            let lastFocus = null;
+
+            function openModal() {
+                lastFocus = document.activeElement;
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                closeBtn.focus();
+            }
+
+            function closeModal() {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+            }
+
+            openBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            overlay.addEventListener('click', e => { if (e.target.id === 'info-modal') closeModal(); });
+            window.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.classList.contains('active')) closeModal();
+            });
+        })();
     </script>
 </body>
 </html>

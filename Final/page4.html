@@ -116,10 +116,10 @@
         g.append('g').attr('class','axis')
             .call(d3.axisLeft(ySc).ticks(8));
         g.append('text').attr('class','axis-label').attr('text-anchor','middle')
-            .attr('x', PW/2).attr('y', PH+40).text('y  (position)');
+            .attr('x', PW/2).attr('y', PH+40).text('x  (position)');
         g.append('text').attr('class','axis-label').attr('text-anchor','middle')
             .attr('transform','rotate(-90)').attr('x', -PH/2).attr('y', -50)
-            .text("y'  (velocity)");
+            .text("x'  (velocity)");
         // Crosshairs (drawn last so they appear on top of grid but under data)
         g.append('line').attr('class','crosshair')
             .attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',PH);
@@ -173,7 +173,7 @@
             .attr('y1',ySc(0)).attr('y2',ySc(0))
             .attr('stroke','#00bcd4').attr('stroke-width',2);
 
-        // y-nullcline: dy'/dt = 0  →  y' = x / [μ(1-x²)], three segments
+        // x'-nullcline: dx'/dt = 0  →  x' = x / [μ(1-x²)], three segments
         const YNULL_N = 300;
         function ynSeg(mu, x0, x1) {
             const pts = [];
@@ -217,8 +217,8 @@
             legG.append('text').attr('x',28).attr('y',y+4)
                 .attr('fill','#bbb').attr('font-size','11px').text(label);
         }
-        legItem(12,  '#00bcd4', false, "x-nullcline  (y' = 0)");
-        legItem(36,  '#ff9800', false, "y-nullcline  (x / μ(1−x²))");
+        legItem(12,  '#00bcd4', false, "x-nullcline  (x' = 0)");
+        legItem(36,  '#ff9800', false, "x'-nullcline  (x / μ(1−x²))");
         legItem(60,  '#aaa',    true,  'Limit cycle (dashed)');
         legItem(84,  '#fff',    false, 'Equilibrium  (0, 0)', true);
 
@@ -242,7 +242,7 @@
                 inner.selectAll('line').attr('stroke', spColor(speed));
             });
 
-            // y-nullcline segments
+            // x'-nullcline segments
             ynLeft.attr('d',   phLine(ynSeg(mu, -3.49, -1.06)));
             ynCenter.attr('d', phLine(ynSeg(mu, -0.94,  0.94)));
             ynRight.attr('d',  phLine(ynSeg(mu,  1.06,  3.49)));
@@ -256,18 +256,41 @@
         update(1.0);
     </script>
 
-    <div class="modal-overlay" id="info-modal">
+    <div class="modal-overlay" id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" aria-hidden="true">
         <div class="modal-box">
             <button class="modal-close" id="modal-close">&times;</button>
-            <h2>Phase Plane: Vector Field and Nullclines</h2>
-            <p>Arrows show the flow direction at each point in the phase plane, colored by speed (dark = slow, bright = fast). The <strong style="color:#00bcd4">cyan line</strong> is the x-nullcline (dx/dt = y′ = 0). The <strong style="color:#ff9800">orange S-curve</strong> is the y-nullcline (dy′/dt = 0, i.e. y′ = x / μ(1−x²)). Their only intersection is the origin — an unstable equilibrium marked by the white circle. The dashed curve is the limit cycle. Drag μ to see how all three elements reshape together.</p>
+            <h2 id="info-modal-title">Phase Plane: Vector Field and Nullclines</h2>
+            <p>Arrows show the flow direction at each point in the phase plane, colored by speed (dark = slow, bright = fast). The <strong style="color:#00bcd4">cyan line</strong> is the x-nullcline (dx/dt = x′ = 0). The <strong style="color:#ff9800">orange S-curve</strong> is the x′-nullcline (dx′/dt = 0, i.e. x′ = x / μ(1−x²)). Their only intersection is the origin — an unstable equilibrium marked by the white circle. The dashed curve is the limit cycle. Drag μ to see how all three elements reshape together.</p>
             <p><strong>Research significance:</strong> Nullcline analysis is the primary geometric tool for understanding 2D ODEs without solving them analytically. The limit cycle's existence is topologically guaranteed by the <strong>Poincaré–Bendixson theorem</strong> whenever an unstable focus is enclosed by a bounded trapping region. This visualization makes that argument visually concrete and shows how the phase-plane geometry — and therefore the system's qualitative behavior — changes with μ.</p>
         </div>
     </div>
     <script>
-        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
-        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
-        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+        (() => {
+            const overlay = document.getElementById('info-modal');
+            const openBtn = document.querySelector('.info-btn');
+            const closeBtn = document.getElementById('modal-close');
+            let lastFocus = null;
+
+            function openModal() {
+                lastFocus = document.activeElement;
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                closeBtn.focus();
+            }
+
+            function closeModal() {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+            }
+
+            openBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            overlay.addEventListener('click', e => { if (e.target.id === 'info-modal') closeModal(); });
+            window.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.classList.contains('active')) closeModal();
+            });
+        })();
     </script>
 </body>
 </html>

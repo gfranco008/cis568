@@ -151,7 +151,7 @@
 
     <div id="charts">
         <div class="chart-panel">
-            <h2>y vs t</h2>
+            <h2>x'(t) vs t</h2>
             <div id="phase-container"></div>
         </div>
         <div class="chart-panel">
@@ -162,7 +162,7 @@
 
     <div id="charts-bottom">
         <div class="chart-panel chart-wide">
-            <h2>Phase Portrait &nbsp;(y vs y') &nbsp;— all μ</h2>
+            <h2>Phase Portrait &nbsp;(x vs x') &nbsp;— all μ</h2>
             <div id="phase-all-container"></div>
         </div>
     </div>
@@ -281,13 +281,13 @@
                 .attr('y1', yScale(0)).attr('y2', yScale(0));
         }
 
-        // ── Top-left: y(t) ───────────────────────────────────────────────────────
+        // ── Top-left: x'(t) ──────────────────────────────────────────────────────
         const svXScale = d3.scaleLinear().domain([0, T_TOTAL - T_TRANSIENT]).range([0, PLOT_W]);
         const svYScale = d3.scaleLinear().domain([-7.5, 7.5]).range([PLOT_H, 0]);
         const svLine   = d3.line().x(d => svXScale(d[0])).y(d => svYScale(d[1]));
         const svG = buildChart('phase-container', VB_W, VB_H);
         addGrid(svG, svXScale, svYScale, 6, 6, PLOT_W, PLOT_H);
-        addAxes(svG, svXScale, svYScale, 6, 6, 't', 'y', PLOT_W, PLOT_H);
+        addAxes(svG, svXScale, svYScale, 6, 6, 't', "x'  (velocity)", PLOT_W, PLOT_H);
         addCrosshairs(svG, svXScale, svYScale, PLOT_W, PLOT_H);
         const svYPath = svG.append('path')
             .attr('fill', 'none').attr('stroke-width', 1.8)
@@ -320,7 +320,7 @@
 
         const allG = buildChart('phase-all-container', ALL_VB_W, ALL_VB_H);
         addGrid(allG, allPhaseXScale, allPhaseYScale, 6, 7, ALL_PLOT_W, ALL_PLOT_H);
-        addAxes(allG, allPhaseXScale, allPhaseYScale, 6, 7, 'y', "y'", ALL_PLOT_W, ALL_PLOT_H);
+        addAxes(allG, allPhaseXScale, allPhaseYScale, 6, 7, 'x', "x'", ALL_PLOT_W, ALL_PLOT_H);
         addCrosshairs(allG, allPhaseXScale, allPhaseYScale, ALL_PLOT_W, ALL_PLOT_H);
 
         // Legend (top-left corner, every 1.0)
@@ -366,7 +366,7 @@
             const color = muColor(qmu);
             const { timePoints, yTimePoints } = getFrame(qmu);
 
-            // Top-left: y(t)
+            // Top-left: x'(t)
             svYPath.attr('stroke', color).attr('d', svLine(yTimePoints));
 
             // Top-right: time series x(t)
@@ -442,18 +442,41 @@
         })();
     </script>
 
-    <div class="modal-overlay" id="info-modal">
+    <div class="modal-overlay" id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" aria-hidden="true">
         <div class="modal-box">
             <button class="modal-close" id="modal-close">&times;</button>
-            <h2>Effect of the Parameter μ</h2>
+            <h2 id="info-modal-title">Effect of the Parameter μ</h2>
             <p>As μ increases from 0.1 to 5, the Van der Pol oscillator transitions from near-sinusoidal oscillation (small μ, nearly linear regime) to relaxation oscillation (large μ, strongly nonlinear). The plasma color encodes μ — purple for weak damping, yellow for strong. The bottom panel shows all limit cycles simultaneously so their shapes can be compared directly.</p>
             <p><strong>Research significance:</strong> Parametric sensitivity analysis is central to the study of nonlinear ODEs. The dramatic change in waveform and phase-portrait geometry as μ increases illustrates how a single parameter can shift a system's entire dynamical regime — the conceptual foundation of bifurcation theory and a key motivation for numerical parameter-sweep studies.</p>
         </div>
     </div>
     <script>
-        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
-        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
-        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+        (() => {
+            const overlay = document.getElementById('info-modal');
+            const openBtn = document.querySelector('.info-btn');
+            const closeBtn = document.getElementById('modal-close');
+            let lastFocus = null;
+
+            function openModal() {
+                lastFocus = document.activeElement;
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                closeBtn.focus();
+            }
+
+            function closeModal() {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+            }
+
+            openBtn.addEventListener('click', openModal);
+            closeBtn.addEventListener('click', closeModal);
+            overlay.addEventListener('click', e => { if (e.target.id === 'info-modal') closeModal(); });
+            window.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.classList.contains('active')) closeModal();
+            });
+        })();
     </script>
 </body>
 </html>
