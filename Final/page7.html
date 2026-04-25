@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Van der Pol — Parametric Surrogate vs μ</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: sans-serif;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #fff;
+        }
+        nav {
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        nav a {
+            color: #2b83ba;
+            text-decoration: none;
+        }
+        nav a:hover { text-decoration: underline; }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 4px;
+            font-size: 1.4rem;
+            letter-spacing: 0.03em;
+            text-align: center;
+        }
+        .subtitle {
+            font-size: 0.82rem;
+            color: #888;
+            margin-bottom: 18px;
+            text-align: center;
+            max-width: 1100px;
+            line-height: 1.5;
+        }
+        #controls {
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 14px;
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        label { font-size: 14px; }
+        input[type=range] { cursor: pointer; }
+        #n-slider { width: 220px; }
+        #t-slider { width: 220px; }
+        #n-display, #t-display {
+            font-weight: bold;
+            min-width: 42px;
+            display: inline-block;
+        }
+        #state-select {
+            background: #222;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
+        #status {
+            font-size: 12px;
+            color: #8d8d8d;
+            min-width: 180px;
+            text-align: center;
+        }
+        #play-btn {
+            background: #2b83ba;
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #play-btn:hover { background: #3e9ed6; }
+        #play-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #charts {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .chart-panel {
+            flex: 1 1 460px;
+            max-width: 580px;
+        }
+        .chart-panel h2 {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #bbb;
+            margin: 0 0 6px 0;
+            font-weight: normal;
+        }
+        .chart-panel svg {
+            border: 1px solid #444;
+            background: #111;
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .axis path, .axis line { stroke: #555; }
+        .axis text { fill: #999; font-size: 11px; }
+        .grid line  { stroke: #2a2a2a; stroke-dasharray: 2,2; }
+        .grid path  { stroke: none; }
+        .axis-label { fill: #888; font-size: 12px; }
+
+        .legend {
+            margin-top: 12px;
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
+            color: #bbb;
+            font-size: 12px;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .swatch {
+            width: 22px;
+            height: 3px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+        .node-swatch {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            border: 1px solid #555;
+        }
+
+        #metrics {
+            margin-top: 14px;
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            gap: 18px;
+            flex-wrap: wrap;
+            justify-content: center;
+            color: #bcbcbc;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+        #metrics strong { color: #fff; }
+
+        .info-btn { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:#2b83ba; color:#fff; border:none; font-size:13px; font-weight:bold; cursor:pointer; vertical-align:middle; margin-left:8px; line-height:1; flex-shrink:0; }
+        .info-btn:hover { background:#3e9ed6; }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:100; align-items:center; justify-content:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#242424; border:1px solid #555; border-radius:8px; padding:28px 32px; max-width:580px; width:90%; position:relative; color:#ddd; line-height:1.6; }
+        .modal-box h2 { margin-top:0; color:#fff; font-size:1.1rem; margin-bottom:10px; }
+        .modal-close { position:absolute; top:10px; right:14px; background:none; border:none; color:#888; font-size:22px; cursor:pointer; line-height:1; padding:0; }
+        .modal-close:hover { color:#fff; }
+        .modal-box p { margin:0 0 12px 0; font-size:0.9rem; }
+        .modal-box p:last-child { margin-bottom:0; }
+        .modal-box strong { color:#fff; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html">Effect of μ</a> &nbsp;|&nbsp;
+        <a href="page2.html">Time Evolution</a> &nbsp;|&nbsp;
+        <a href="page3.html">Basin of Attraction</a> &nbsp;|&nbsp;
+        <a href="page4.html">Vector Field</a> &nbsp;|&nbsp;
+        <a href="page5.html">Amplitude &amp; Period</a> &nbsp;|&nbsp;
+        <a href="page6.html">Chebyshev Interpolation</a> &nbsp;|&nbsp;
+        Surrogate vs μ
+    </nav>
+
+    <h1>Van der Pol — Parametric Surrogate Accuracy vs Cost <button class="info-btn" aria-label="About this visualization">?</button></h1>
+    <p class="subtitle">
+        This page studies interpolation in the parameter μ (not time). For each fixed snapshot time t*, we build a surrogate
+        y(μ, t*) from N training μ points using barycentric interpolation, then compare equispaced versus Chebyshev node placement
+        on the same reference RK4 dataset.
+    </p>
+
+    <div id="controls">
+        <label>state:</label>
+        <select id="state-select">
+            <option value="x">x(t)</option>
+            <option value="v">x'(t)</option>
+        </select>
+
+        <label>t* = <span id="t-display">10.0</span></label>
+        <input id="t-slider" type="range" min="0.0" max="20.0" step="0.2" value="10.0">
+        <button id="play-btn" type="button">▶ Play</button>
+
+        <label>N = <span id="n-display">21</span></label>
+        <input id="n-slider" type="range" min="5" max="41" step="2" value="21">
+
+        <span id="status">Precomputing trajectories...</span>
+    </div>
+
+    <div id="charts">
+        <div class="chart-panel">
+            <h2>Snapshot Surrogate at t*: true vs predicted</h2>
+            <div id="snap-container"></div>
+        </div>
+        <div class="chart-panel">
+            <h2>Absolute Error vs μ at t*</h2>
+            <div id="err-container"></div>
+        </div>
+        <div class="chart-panel">
+            <h2>Convergence with N (max error)</h2>
+            <div id="conv-container"></div>
+        </div>
+        <div class="chart-panel">
+            <h2>Interpolation Cost with N (ms)</h2>
+            <div id="time-container"></div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <span class="legend-item"><span class="swatch" style="background:#d8d8d8"></span>Reference RK4</span>
+        <span class="legend-item"><span class="swatch" style="background:#ff6b6b"></span>Equispaced barycentric</span>
+        <span class="legend-item"><span class="swatch" style="background:#2ec4b6"></span>Chebyshev barycentric</span>
+        <span class="legend-item"><span class="node-swatch" style="background:none;border-color:#ff6b6b"></span>Equispaced train μ</span>
+        <span class="legend-item"><span class="node-swatch" style="background:#2ec4b6;border-color:#2ec4b6"></span>Chebyshev train μ</span>
+    </div>
+
+    <div id="metrics">
+        <span>max error (equispaced): <strong id="max-equi">-</strong></span>
+        <span>max error (Chebyshev): <strong id="max-cheb">-</strong></span>
+        <span>MAE (equispaced): <strong id="mae-equi">-</strong></span>
+        <span>MAE (Chebyshev): <strong id="mae-cheb">-</strong></span>
+        <span>improvement ratio (max): <strong id="ratio-max">-</strong></span>
+        <span>interp time at N (equi/cheb): <strong id="time-pair">-</strong></span>
+    </div>
+
+    <script>
+        const MU_MIN = 0.0;
+        const MU_MAX = 5.0;
+        const H = 0.02;
+        const T_MAX = 20.0;
+        const N_STEPS = Math.round(T_MAX / H);
+
+        const MARGIN = { top: 22, right: 22, bottom: 48, left: 60 };
+        const VW = 560;
+        const VH = 390;
+        const PW = VW - MARGIN.left - MARGIN.right;
+        const PH = VH - MARGIN.top - MARGIN.bottom;
+
+        const COLORS = {
+            truth: '#d8d8d8',
+            equi: '#ff6b6b',
+            cheb: '#2ec4b6'
+        };
+
+        const MU_REF_COUNT = 81;
+        const N_LIST = [];
+        for (let n = 5; n <= 41; n += 2) N_LIST.push(n);
+
+        const muRef = [];
+        for (let i = 0; i < MU_REF_COUNT; i++) {
+            muRef.push(MU_MIN + (MU_MAX - MU_MIN) * i / (MU_REF_COUNT - 1));
+        }
+
+        const trajCache = new Map();
+
+        function muKey(mu) {
+            return mu.toFixed(8);
+        }
+
+        function vdpRHS(x, v, mu) {
+            return [v, mu * (1 - x * x) * v - x];
+        }
+
+        function rk4Step(x, v, mu, h) {
+            const [k1x, k1v] = vdpRHS(x,           v,           mu);
+            const [k2x, k2v] = vdpRHS(x+h/2*k1x,  v+h/2*k1v,   mu);
+            const [k3x, k3v] = vdpRHS(x+h/2*k2x,  v+h/2*k2v,   mu);
+            const [k4x, k4v] = vdpRHS(x+h*k3x,    v+h*k3v,     mu);
+            return [
+                x + (h/6) * (k1x + 2*k2x + 2*k3x + k4x),
+                v + (h/6) * (k1v + 2*k2v + 2*k3v + k4v)
+            ];
+        }
+
+        function solveTrajectory(mu) {
+            const key = muKey(mu);
+            if (trajCache.has(key)) return trajCache.get(key);
+
+            let x = 2.0;
+            let v = 0.0;
+            const xs = new Float64Array(N_STEPS + 1);
+            const vs = new Float64Array(N_STEPS + 1);
+            xs[0] = x;
+            vs[0] = v;
+
+            for (let i = 1; i <= N_STEPS; i++) {
+                [x, v] = rk4Step(x, v, mu, H);
+                xs[i] = x;
+                vs[i] = v;
+            }
+
+            const out = { x: xs, v: vs };
+            trajCache.set(key, out);
+            return out;
+        }
+
+        function equiNodes(N) {
+            const out = [];
+            for (let k = 0; k < N; k++) {
+                out.push(MU_MIN + (MU_MAX - MU_MIN) * k / (N - 1));
+            }
+            return out;
+        }
+
+        function chebNodes(N) {
+            const out = [];
+            for (let k = 0; k < N; k++) {
+                const x = Math.cos((2 * k + 1) * Math.PI / (2 * N));
+                out.push(0.5 * (MU_MAX - MU_MIN) * x + 0.5 * (MU_MAX + MU_MIN));
+            }
+            out.sort((a, b) => a - b);
+            return out;
+        }
+
+        function buildPrecomputeList() {
+            const m = new Map();
+            for (const mu of muRef) m.set(muKey(mu), mu);
+            for (const N of N_LIST) {
+                for (const mu of equiNodes(N)) m.set(muKey(mu), mu);
+                for (const mu of chebNodes(N)) m.set(muKey(mu), mu);
+            }
+            return Array.from(m.values()).sort((a, b) => a - b);
+        }
+
+        const precomputeMus = buildPrecomputeList();
+
+        function baryWeights(nodes) {
+            const m = nodes.length;
+            const logAbs = new Array(m);
+            const sign = new Array(m);
+            let maxLog = -Infinity;
+
+            for (let i = 0; i < m; i++) {
+                let s = 1;
+                let lv = 0;
+                for (let j = 0; j < m; j++) {
+                    if (i === j) continue;
+                    const d = nodes[i] - nodes[j];
+                    s *= Math.sign(d);
+                    lv += Math.log(Math.abs(d));
+                }
+                const li = -lv;
+                logAbs[i] = li;
+                sign[i] = s;
+                if (li > maxLog) maxLog = li;
+            }
+
+            const w = new Array(m);
+            for (let i = 0; i < m; i++) {
+                w[i] = sign[i] * Math.exp(logAbs[i] - maxLog);
+            }
+            return w;
+        }
+
+        function baryEval(mu, nodes, vals, w, eps) {
+            let num = 0;
+            let den = 0;
+            for (let i = 0; i < nodes.length; i++) {
+                const d = mu - nodes[i];
+                if (Math.abs(d) < eps) return vals[i];
+                const q = w[i] / d;
+                num += q * vals[i];
+                den += q;
+            }
+            return num / den;
+        }
+
+        function mean(arr) {
+            let s = 0;
+            for (const v of arr) s += v;
+            return s / arr.length;
+        }
+
+        function max(arr) {
+            let m = -Infinity;
+            for (const v of arr) if (v > m) m = v;
+            return m;
+        }
+
+        function min(arr) {
+            let m = Infinity;
+            for (const v of arr) if (v < m) m = v;
+            return m;
+        }
+
+        function chart(containerId, xLabel, yLabel) {
+            const svg = d3.select(`#${containerId}`).append('svg')
+                .attr('viewBox', `0 0 ${VW} ${VH}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+            const g = svg.append('g')
+                .attr('transform', `translate(${MARGIN.left},${MARGIN.top})`);
+
+            const gridX = g.append('g').attr('class', 'grid')
+                .attr('transform', `translate(0,${PH})`);
+            const gridY = g.append('g').attr('class', 'grid');
+            const axisX = g.append('g').attr('class', 'axis')
+                .attr('transform', `translate(0,${PH})`);
+            const axisY = g.append('g').attr('class', 'axis');
+
+            g.append('text').attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('x', PW / 2)
+                .attr('y', PH + 40)
+                .text(xLabel);
+
+            g.append('text').attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', -PH / 2)
+                .attr('y', -44)
+                .text(yLabel);
+
+            return { g, gridX, gridY, axisX, axisY };
+        }
+
+        function updateAxes(ch, xSc, ySc, xTicks, yTicks, yFmt = null) {
+            ch.gridX.call(d3.axisBottom(xSc).ticks(xTicks).tickSize(-PH).tickFormat(''));
+            ch.gridY.call(d3.axisLeft(ySc).ticks(yTicks).tickSize(-PW).tickFormat(''));
+            ch.axisX.call(d3.axisBottom(xSc).ticks(xTicks));
+            const yAxis = d3.axisLeft(ySc).ticks(yTicks);
+            if (yFmt) yAxis.tickFormat(yFmt);
+            ch.axisY.call(yAxis);
+        }
+
+        const snapChart = chart('snap-container', 'μ', 'state value');
+        const errChart = chart('err-container', 'μ', '|error|');
+        const convChart = chart('conv-container', 'N', 'max error');
+        const timeChart = chart('time-container', 'N', 'milliseconds');
+
+        const snapTruthPath = snapChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.truth).attr('stroke-width', 2.2);
+        const snapEquiPath = snapChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.equi).attr('stroke-width', 2.2);
+        const snapChebPath = snapChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.cheb).attr('stroke-width', 2.2);
+        const snapEquiNodes = snapChart.g.append('g');
+        const snapChebNodes = snapChart.g.append('g');
+
+        const errEquiPath = errChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.equi).attr('stroke-width', 2.2);
+        const errChebPath = errChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.cheb).attr('stroke-width', 2.2);
+
+        const convEquiPath = convChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.equi).attr('stroke-width', 2.4);
+        const convChebPath = convChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.cheb).attr('stroke-width', 2.4);
+        const convCursor = convChart.g.append('line').attr('stroke', '#aaa').attr('stroke-width', 1).attr('stroke-dasharray', '4,3');
+        const convEquiDot = convChart.g.append('circle').attr('r', 5).attr('fill', COLORS.equi).attr('stroke', '#111').attr('stroke-width', 1.2);
+        const convChebDot = convChart.g.append('circle').attr('r', 5).attr('fill', COLORS.cheb).attr('stroke', '#111').attr('stroke-width', 1.2);
+
+        const timeEquiPath = timeChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.equi).attr('stroke-width', 2.4);
+        const timeChebPath = timeChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.cheb).attr('stroke-width', 2.4);
+        const timeCursor = timeChart.g.append('line').attr('stroke', '#aaa').attr('stroke-width', 1).attr('stroke-dasharray', '4,3');
+        const timeEquiDot = timeChart.g.append('circle').attr('r', 5).attr('fill', COLORS.equi).attr('stroke', '#111').attr('stroke-width', 1.2);
+        const timeChebDot = timeChart.g.append('circle').attr('r', 5).attr('fill', COLORS.cheb).attr('stroke', '#111').attr('stroke-width', 1.2);
+
+        const nSlider = document.getElementById('n-slider');
+        const tSlider = document.getElementById('t-slider');
+        const playBtn = document.getElementById('play-btn');
+        const stateSelect = document.getElementById('state-select');
+        const nDisplay = document.getElementById('n-display');
+        const tDisplay = document.getElementById('t-display');
+        const statusEl = document.getElementById('status');
+
+        const PLAY_INTERVAL_MS = 260;
+        let isPlaying = false;
+        let playTimer = null;
+        let isComputing = false;
+
+        function setControlsEnabled(enabled) {
+            nSlider.disabled = !enabled;
+            tSlider.disabled = !enabled;
+            playBtn.disabled = !enabled;
+            stateSelect.disabled = !enabled;
+        }
+
+        function truthAt(stateKey, idx) {
+            return muRef.map(mu => solveTrajectory(mu)[stateKey][idx]);
+        }
+
+        function evalMethod(method, N, stateKey, idx, truthVals) {
+            const nodes = method === 'cheb' ? chebNodes(N) : equiNodes(N);
+            const nodeVals = nodes.map(mu => solveTrajectory(mu)[stateKey][idx]);
+
+            const t0 = performance.now();
+            const w = baryWeights(nodes);
+            const eps = (MU_MAX - MU_MIN) * 1e-13;
+            const pred = muRef.map(mu => baryEval(mu, nodes, nodeVals, w, eps));
+            const elapsed = performance.now() - t0;
+
+            const err = pred.map((p, i) => Math.max(Math.abs(p - truthVals[i]), 1e-15));
+            return {
+                nodes,
+                nodeVals,
+                pred,
+                err,
+                mae: mean(err),
+                maxErr: max(err),
+                ms: elapsed
+            };
+        }
+
+        function computeAnalysis(stateKey, idx) {
+            const truth = truthAt(stateKey, idx);
+            const byN = new Map();
+            const rows = [];
+
+            for (const N of N_LIST) {
+                const equi = evalMethod('equi', N, stateKey, idx, truth);
+                const cheb = evalMethod('cheb', N, stateKey, idx, truth);
+                byN.set(N, { equi, cheb });
+                rows.push({
+                    N,
+                    equiMax: equi.maxErr,
+                    chebMax: cheb.maxErr,
+                    equiMae: equi.mae,
+                    chebMae: cheb.mae,
+                    equiMs: equi.ms,
+                    chebMs: cheb.ms
+                });
+            }
+
+            return { truth, byN, rows };
+        }
+
+        let currentAnalysis = null;
+        const analysisCache = new Map();
+        let recomputeToken = 0;
+
+        function render() {
+            if (!currentAnalysis) return;
+
+            const N = +nSlider.value;
+            const tVal = +tSlider.value;
+            const selected = currentAnalysis.byN.get(N);
+            if (!selected) return;
+
+            const truth = currentAnalysis.truth;
+            const rows = currentAnalysis.rows;
+            const equi = selected.equi;
+            const cheb = selected.cheb;
+
+            const xMu = d3.scaleLinear().domain([MU_MIN, MU_MAX]).range([0, PW]);
+
+            // Snapshot chart
+            const yMin = min([...truth, ...equi.pred, ...cheb.pred]);
+            const yMax = max([...truth, ...equi.pred, ...cheb.pred]);
+            const yPad = (yMax - yMin) * 0.14 || 0.2;
+            const ySnap = d3.scaleLinear().domain([yMin - yPad, yMax + yPad]).range([PH, 0]).nice();
+
+            updateAxes(snapChart, xMu, ySnap, 6, 6);
+
+            const lineSnap = d3.line().x((d, i) => xMu(muRef[i])).y(d => ySnap(d));
+            snapTruthPath.datum(truth).attr('d', lineSnap);
+            snapEquiPath.datum(equi.pred).attr('d', lineSnap);
+            snapChebPath.datum(cheb.pred).attr('d', lineSnap);
+
+            snapEquiNodes.selectAll('circle')
+                .data(equi.nodes.map((mu, i) => ({ mu, val: equi.nodeVals[i] })))
+                .join('circle')
+                .attr('cx', d => xMu(d.mu))
+                .attr('cy', d => ySnap(d.val))
+                .attr('r', 2.7)
+                .attr('fill', 'none')
+                .attr('stroke', COLORS.equi)
+                .attr('stroke-width', 1.2)
+                .attr('opacity', 0.9);
+
+            snapChebNodes.selectAll('circle')
+                .data(cheb.nodes.map((mu, i) => ({ mu, val: cheb.nodeVals[i] })))
+                .join('circle')
+                .attr('cx', d => xMu(d.mu))
+                .attr('cy', d => ySnap(d.val))
+                .attr('r', 2.3)
+                .attr('fill', COLORS.cheb)
+                .attr('stroke', 'none')
+                .attr('opacity', 0.95);
+
+            // Error chart
+            const errMin = Math.max(1e-15, Math.min(min(equi.err), min(cheb.err)) * 0.7);
+            const errMax = Math.max(1e-12, Math.max(max(equi.err), max(cheb.err)) * 1.3);
+            const yErr = d3.scaleLog().domain([errMin, errMax]).range([PH, 0]);
+            updateAxes(errChart, xMu, yErr, 6, 6, d3.format('.0e'));
+
+            const lineErr = d3.line().x((d, i) => xMu(muRef[i])).y(d => yErr(d));
+            errEquiPath.datum(equi.err).attr('d', lineErr);
+            errChebPath.datum(cheb.err).attr('d', lineErr);
+
+            // Convergence chart
+            const xN = d3.scaleLinear().domain([N_LIST[0], N_LIST[N_LIST.length - 1]]).range([0, PW]);
+            const convMin = Math.max(1e-15, Math.min(d3.min(rows, d => d.equiMax), d3.min(rows, d => d.chebMax)) * 0.7);
+            const convMax = Math.max(1e-12, Math.max(d3.max(rows, d => d.equiMax), d3.max(rows, d => d.chebMax)) * 1.3);
+            const yConv = d3.scaleLog().domain([convMin, convMax]).range([PH, 0]);
+            updateAxes(convChart, xN, yConv, 8, 6, d3.format('.0e'));
+
+            const lineConv = d3.line().x(d => xN(d.N)).y(d => yConv(d.val));
+            convEquiPath.datum(rows.map(d => ({ N: d.N, val: d.equiMax }))).attr('d', lineConv);
+            convChebPath.datum(rows.map(d => ({ N: d.N, val: d.chebMax }))).attr('d', lineConv);
+
+            const rowN = rows.find(d => d.N === N);
+            if (rowN) {
+                const cx = xN(N);
+                convCursor.attr('x1', cx).attr('x2', cx).attr('y1', 0).attr('y2', PH);
+                convEquiDot.attr('cx', cx).attr('cy', yConv(rowN.equiMax));
+                convChebDot.attr('cx', cx).attr('cy', yConv(rowN.chebMax));
+            }
+
+            // Runtime chart
+            const tMin = 0;
+            const tMax = Math.max(d3.max(rows, d => d.equiMs), d3.max(rows, d => d.chebMs)) * 1.2 + 0.001;
+            const yTime = d3.scaleLinear().domain([tMin, tMax]).range([PH, 0]).nice();
+            updateAxes(timeChart, xN, yTime, 8, 6);
+
+            const lineTime = d3.line().x(d => xN(d.N)).y(d => yTime(d.val));
+            timeEquiPath.datum(rows.map(d => ({ N: d.N, val: d.equiMs }))).attr('d', lineTime);
+            timeChebPath.datum(rows.map(d => ({ N: d.N, val: d.chebMs }))).attr('d', lineTime);
+
+            if (rowN) {
+                const cx = xN(N);
+                timeCursor.attr('x1', cx).attr('x2', cx).attr('y1', 0).attr('y2', PH);
+                timeEquiDot.attr('cx', cx).attr('cy', yTime(rowN.equiMs));
+                timeChebDot.attr('cx', cx).attr('cy', yTime(rowN.chebMs));
+            }
+
+            // Metrics
+            const ratio = equi.maxErr / Math.max(cheb.maxErr, 1e-16);
+            document.getElementById('max-equi').textContent = equi.maxErr.toExponential(3);
+            document.getElementById('max-cheb').textContent = cheb.maxErr.toExponential(3);
+            document.getElementById('mae-equi').textContent = equi.mae.toExponential(3);
+            document.getElementById('mae-cheb').textContent = cheb.mae.toExponential(3);
+            document.getElementById('ratio-max').textContent = `${ratio.toFixed(2)}x`;
+            document.getElementById('time-pair').textContent = `${equi.ms.toFixed(3)} / ${cheb.ms.toFixed(3)} ms`;
+
+            nDisplay.textContent = `${N}`;
+            tDisplay.textContent = tVal.toFixed(1);
+        }
+
+        function recomputeAndRender() {
+            const token = ++recomputeToken;
+            const stateKey = stateSelect.value;
+            const tVal = +tSlider.value;
+            const idx = Math.max(0, Math.min(N_STEPS, Math.round(tVal / H)));
+            const cacheKey = `${stateKey}|${idx}`;
+
+            statusEl.textContent = 'Computing surrogate diagnostics...';
+            isComputing = true;
+
+            if (analysisCache.has(cacheKey)) {
+                currentAnalysis = analysisCache.get(cacheKey);
+                render();
+                isComputing = false;
+                statusEl.textContent = isPlaying ? 'Playing t*...' : '';
+                return;
+            }
+
+            setTimeout(() => {
+                if (token !== recomputeToken) return;
+                currentAnalysis = computeAnalysis(stateKey, idx);
+                analysisCache.set(cacheKey, currentAnalysis);
+                render();
+                isComputing = false;
+                statusEl.textContent = isPlaying ? 'Playing t*...' : '';
+            }, 0);
+        }
+
+        function stopPlayback() {
+            isPlaying = false;
+            if (playTimer !== null) {
+                clearTimeout(playTimer);
+                playTimer = null;
+            }
+            playBtn.textContent = '▶ Play';
+            statusEl.textContent = '';
+        }
+
+        function schedulePlaybackStep(delay = PLAY_INTERVAL_MS) {
+            if (!isPlaying) return;
+            playTimer = setTimeout(stepPlayback, delay);
+        }
+
+        function stepPlayback() {
+            if (!isPlaying) return;
+            if (isComputing) {
+                schedulePlaybackStep(50);
+                return;
+            }
+
+            const tStep = +(tSlider.step || 0.2);
+            const tMin = +tSlider.min;
+            const tMax = +tSlider.max;
+            let next = +(+tSlider.value + tStep).toFixed(10);
+            if (next > tMax + 1e-9) next = tMin;
+
+            tSlider.value = next.toFixed(1);
+            tDisplay.textContent = next.toFixed(1);
+
+            recomputeAndRender();
+            schedulePlaybackStep();
+        }
+
+        function precomputeAllAsync(onDone) {
+            let i = 0;
+            const total = precomputeMus.length;
+            const CHUNK = 2;
+
+            function step() {
+                const end = Math.min(total, i + CHUNK);
+                for (; i < end; i++) {
+                    solveTrajectory(precomputeMus[i]);
+                }
+
+                const pct = Math.round((100 * i) / total);
+                statusEl.textContent = `Precomputing trajectories... ${i}/${total} (${pct}%)`;
+
+                if (i < total) setTimeout(step, 0);
+                else onDone();
+            }
+
+            step();
+        }
+
+        nSlider.addEventListener('input', () => {
+            if (isPlaying) stopPlayback();
+            nDisplay.textContent = nSlider.value;
+            render();
+        });
+
+        tSlider.addEventListener('input', () => {
+            tDisplay.textContent = (+tSlider.value).toFixed(1);
+        });
+
+        tSlider.addEventListener('change', () => {
+            if (isPlaying) stopPlayback();
+            recomputeAndRender();
+        });
+
+        stateSelect.addEventListener('change', () => {
+            if (isPlaying) stopPlayback();
+            recomputeAndRender();
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                stopPlayback();
+                return;
+            }
+            isPlaying = true;
+            playBtn.textContent = '❚❚ Pause';
+            statusEl.textContent = 'Playing t*...';
+            stepPlayback();
+        });
+
+        setControlsEnabled(false);
+        precomputeAllAsync(() => {
+            statusEl.textContent = '';
+            setControlsEnabled(true);
+            recomputeAndRender();
+        });
+    </script>
+
+    <div class="modal-overlay" id="info-modal">
+        <div class="modal-box">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <h2>Why This Page Matters for the Thesis</h2>
+            <p>Your core question is not only trajectory behavior at a fixed μ, but also how accurately we can <strong>predict across μ</strong> from a limited set of training parameter samples. This page fixes time t* and treats the state as a function of μ, then builds barycentric surrogates from N training nodes.</p>
+            <p>By comparing <strong>equispaced vs Chebyshev μ nodes</strong>, you can see where node placement changes the error profile over the parameter domain. The convergence panel quantifies error decay as N increases, and the runtime panel shows computational cost, so the method can be judged on both accuracy and efficiency.</p>
+            <p><strong>Research significance:</strong> this is the operational view used in your surrogate workflow: select μ training points, interpolate parametric ODE outputs, and evaluate error/cost tradeoffs before downstream tasks such as emulator design and model comparison.</p>
+        </div>
+    </div>
+    <script>
+        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
+        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
+        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+    </script>
+</body>
+</html>
