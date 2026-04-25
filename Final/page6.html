@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Van der Pol — Barycentric Interpolation</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: sans-serif;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #fff;
+        }
+        nav {
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        nav a {
+            color: #2b83ba;
+            text-decoration: none;
+        }
+        nav a:hover { text-decoration: underline; }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 4px;
+            font-size: 1.4rem;
+            letter-spacing: 0.03em;
+            text-align: center;
+        }
+        .subtitle {
+            font-size: 0.82rem;
+            color: #888;
+            margin-bottom: 18px;
+            text-align: center;
+            max-width: 1020px;
+            line-height: 1.5;
+        }
+        #controls {
+            margin-bottom: 18px;
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            width: 100%;
+            max-width: 1200px;
+        }
+        label { font-size: 14px; }
+        input[type=range] { cursor: pointer; }
+        #mu-slider { width: 210px; }
+        #n-slider { width: 200px; }
+        #mu-display, #n-display {
+            font-weight: bold;
+            min-width: 36px;
+            display: inline-block;
+        }
+        #mu-swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-left: 4px;
+            border: 1px solid #555;
+        }
+        #window-select {
+            background: #222;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
+        #status {
+            font-size: 12px;
+            color: #8d8d8d;
+            min-width: 110px;
+            text-align: center;
+        }
+        #charts {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .chart-panel {
+            flex: 1 1 460px;
+            max-width: 580px;
+        }
+        .chart-panel.wide {
+            flex: 1 1 100%;
+            max-width: 1200px;
+        }
+        .chart-panel h2 {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #bbb;
+            margin: 0 0 6px 0;
+            font-weight: normal;
+        }
+        .chart-panel svg {
+            border: 1px solid #444;
+            background: #111;
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .axis path, .axis line { stroke: #555; }
+        .axis text { fill: #999; font-size: 11px; }
+        .grid line  { stroke: #2a2a2a; stroke-dasharray: 2,2; }
+        .grid path  { stroke: none; }
+        .axis-label { fill: #888; font-size: 12px; }
+
+        #metrics {
+            margin-top: 14px;
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            gap: 18px;
+            flex-wrap: wrap;
+            justify-content: center;
+            color: #bcbcbc;
+            font-size: 13px;
+        }
+        #metrics strong { color: #fff; }
+
+        .legend {
+            margin-top: 10px;
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
+            color: #bbb;
+            font-size: 12px;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .swatch {
+            width: 22px;
+            height: 3px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        .node-swatch {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            border: 1px solid #555;
+        }
+
+        .info-btn { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:#2b83ba; color:#fff; border:none; font-size:13px; font-weight:bold; cursor:pointer; vertical-align:middle; margin-left:8px; line-height:1; flex-shrink:0; }
+        .info-btn:hover { background:#3e9ed6; }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:100; align-items:center; justify-content:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#242424; border:1px solid #555; border-radius:8px; padding:28px 32px; max-width:560px; width:90%; position:relative; color:#ddd; line-height:1.6; }
+        .modal-box h2 { margin-top:0; color:#fff; font-size:1.1rem; margin-bottom:10px; }
+        .modal-close { position:absolute; top:10px; right:14px; background:none; border:none; color:#888; font-size:22px; cursor:pointer; line-height:1; padding:0; }
+        .modal-close:hover { color:#fff; }
+        .modal-box p { margin:0 0 12px 0; font-size:0.9rem; }
+        .modal-box p:last-child { margin-bottom:0; }
+        .modal-box strong { color:#fff; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html">Effect of μ</a> &nbsp;|&nbsp;
+        <a href="page2.html">Time Evolution</a> &nbsp;|&nbsp;
+        <a href="page3.html">Basin of Attraction</a> &nbsp;|&nbsp;
+        <a href="page4.html">Vector Field</a> &nbsp;|&nbsp;
+        <a href="page5.html">Amplitude &amp; Period</a> &nbsp;|&nbsp;
+        Chebyshev Interpolation
+    </nav>
+
+    <h1>Van der Pol — Barycentric Lagrange Interpolation <button class="info-btn" aria-label="About this visualization">?</button></h1>
+    <p class="subtitle">
+        Interpolate the RK4 reference trajectory x(t) for the Van der Pol oscillator using degree-n polynomials.
+        Compare equispaced sampling nodes versus Chebyshev-Lobatto nodes on the same post-transient time window,
+        and track how interpolation error converges as n increases.
+    </p>
+
+    <div id="controls">
+        <label>
+            μ = <span id="mu-display">1.00</span>
+            <span id="mu-swatch"></span>
+        </label>
+        <input id="mu-slider" type="range" min="0.10" max="5.00" step="0.05" value="1.00">
+
+        <label>degree n = <span id="n-display">16</span></label>
+        <input id="n-slider" type="range" min="4" max="48" step="1" value="16">
+
+        <label for="window-select">window:</label>
+        <select id="window-select">
+            <option value="8">last 8 time units</option>
+            <option value="12" selected>last 12 time units</option>
+            <option value="18">last 18 time units</option>
+        </select>
+
+        <span id="status"></span>
+    </div>
+
+    <div id="charts">
+        <div class="chart-panel">
+            <h2>x(t): truth vs barycentric interpolants</h2>
+            <div id="curve-container"></div>
+        </div>
+        <div class="chart-panel">
+            <h2>Pointwise error |x(t) - p_n(t)|</h2>
+            <div id="error-container"></div>
+        </div>
+        <div class="chart-panel wide">
+            <h2>Convergence: max error over degree n</h2>
+            <div id="conv-container"></div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <span class="legend-item"><span class="swatch" style="background:#d8d8d8"></span>RK4 reference x(t)</span>
+        <span class="legend-item"><span class="swatch" style="background:#ff6b6b"></span>Equispaced barycentric</span>
+        <span class="legend-item"><span class="swatch" style="background:#2ec4b6"></span>Chebyshev barycentric</span>
+        <span class="legend-item"><span class="node-swatch" style="background:#ff6b6b"></span>Equispaced nodes</span>
+        <span class="legend-item"><span class="node-swatch" style="background:#2ec4b6"></span>Chebyshev nodes</span>
+    </div>
+
+    <div id="metrics">
+        <span>interval: <strong id="interval-text">-</strong></span>
+        <span>max error (equispaced): <strong id="max-equi">-</strong></span>
+        <span>max error (Chebyshev): <strong id="max-cheb">-</strong></span>
+        <span>ratio (equi/cheb): <strong id="ratio-text">-</strong></span>
+        <span>tail slope log10(error)/n (equi): <strong id="slope-equi">-</strong></span>
+        <span>tail slope log10(error)/n (cheb): <strong id="slope-cheb">-</strong></span>
+    </div>
+
+    <script>
+        const MU_MIN = 0.10;
+        const MU_MAX = 5.00;
+        const MU_STEP = 0.05;
+
+        const N_MIN = 4;
+        const N_MAX = 48;
+
+        const H_REF = 0.01;
+        const T_TOTAL = 80;
+        const T_SKIP = 40;
+        const N_REF = Math.round(T_TOTAL / H_REF);
+
+        const DENSE_COUNT = 720;
+
+        const COLORS = {
+            truth: '#d8d8d8',
+            equi: '#ff6b6b',
+            cheb: '#2ec4b6'
+        };
+
+        const muColor = d3.scaleSequential()
+            .domain([MU_MIN, MU_MAX])
+            .interpolator(d3.interpolatePlasma);
+
+        const refCache = new Map();
+        const convCache = new Map();
+
+        function quantizeMu(mu) {
+            return +(Math.round(mu / MU_STEP) * MU_STEP).toFixed(2);
+        }
+
+        function vdpRHS(x, y, mu) {
+            return [y, mu * (1 - x * x) * y - x];
+        }
+
+        function rk4Step(x, y, mu, h) {
+            const [k1x, k1y] = vdpRHS(x,            y,            mu);
+            const [k2x, k2y] = vdpRHS(x + h/2*k1x, y + h/2*k1y, mu);
+            const [k3x, k3y] = vdpRHS(x + h/2*k2x, y + h/2*k2y, mu);
+            const [k4x, k4y] = vdpRHS(x + h*k3x,   y + h*k3y,   mu);
+            return [
+                x + (h/6) * (k1x + 2*k2x + 2*k3x + k4x),
+                y + (h/6) * (k1y + 2*k2y + 2*k3y + k4y)
+            ];
+        }
+
+        function computeReference(mu) {
+            let x = 2.0;
+            let y = 0.0;
+            const t = new Array(N_REF + 1);
+            const xs = new Array(N_REF + 1);
+            t[0] = 0;
+            xs[0] = x;
+            for (let i = 1; i <= N_REF; i++) {
+                [x, y] = rk4Step(x, y, mu, H_REF);
+                t[i] = i * H_REF;
+                xs[i] = x;
+            }
+            return { t, xs };
+        }
+
+        function getReference(mu) {
+            const q = quantizeMu(mu).toFixed(2);
+            if (!refCache.has(q)) refCache.set(q, computeReference(+q));
+            return refCache.get(q);
+        }
+
+        function sampleRef(ref, tq) {
+            if (tq <= 0) return ref.xs[0];
+            if (tq >= T_TOTAL) return ref.xs[ref.xs.length - 1];
+
+            const idx = Math.floor(tq / H_REF);
+            const t0 = idx * H_REF;
+            const t1 = (idx + 1) * H_REF;
+            const x0 = ref.xs[idx];
+            const x1 = ref.xs[idx + 1];
+            const a = (tq - t0) / (t1 - t0);
+            return x0 + a * (x1 - x0);
+        }
+
+        function linspace(a, b, count) {
+            const out = new Array(count);
+            for (let i = 0; i < count; i++) {
+                out[i] = a + (b - a) * i / (count - 1);
+            }
+            return out;
+        }
+
+        function equispacedNodes(n, a, b) {
+            const nodes = [];
+            for (let k = 0; k <= n; k++) nodes.push(a + (b - a) * k / n);
+            return nodes;
+        }
+
+        function chebLobattoNodes(n, a, b) {
+            const mid = 0.5 * (a + b);
+            const rad = 0.5 * (b - a);
+            const nodes = [];
+            for (let k = n; k >= 0; k--) {
+                nodes.push(mid + rad * Math.cos(Math.PI * k / n));
+            }
+            return nodes;
+        }
+
+        // Log-scaled barycentric weights to avoid under/overflow at larger n.
+        function baryWeights(nodes) {
+            const m = nodes.length;
+            const logAbs = new Array(m);
+            const sign = new Array(m);
+            let maxLog = -Infinity;
+
+            for (let i = 0; i < m; i++) {
+                let s = 1;
+                let lv = 0;
+                for (let j = 0; j < m; j++) {
+                    if (i === j) continue;
+                    const d = nodes[i] - nodes[j];
+                    s *= Math.sign(d);
+                    lv += Math.log(Math.abs(d));
+                }
+                const li = -lv;
+                logAbs[i] = li;
+                sign[i] = s;
+                if (li > maxLog) maxLog = li;
+            }
+
+            const w = new Array(m);
+            for (let i = 0; i < m; i++) {
+                w[i] = sign[i] * Math.exp(logAbs[i] - maxLog);
+            }
+            return w;
+        }
+
+        function baryEval(x, nodes, vals, w, eps) {
+            let num = 0;
+            let den = 0;
+            for (let i = 0; i < nodes.length; i++) {
+                const d = x - nodes[i];
+                if (Math.abs(d) < eps) return vals[i];
+                const u = w[i] / d;
+                num += u * vals[i];
+                den += u;
+            }
+            return num / den;
+        }
+
+        function maxOf(arr) {
+            let m = -Infinity;
+            for (const v of arr) if (v > m) m = v;
+            return m;
+        }
+
+        function minOf(arr) {
+            let m = Infinity;
+            for (const v of arr) if (v < m) m = v;
+            return m;
+        }
+
+        function computeSingle(ref, t0, t1, n) {
+            const denseT = linspace(t0, t1, DENSE_COUNT);
+            const truth = denseT.map(t => sampleRef(ref, t));
+
+            const eqNodes = equispacedNodes(n, t0, t1);
+            const chNodes = chebLobattoNodes(n, t0, t1);
+
+            const eqVals = eqNodes.map(t => sampleRef(ref, t));
+            const chVals = chNodes.map(t => sampleRef(ref, t));
+
+            const eqW = baryWeights(eqNodes);
+            const chW = baryWeights(chNodes);
+
+            const eps = (t1 - t0) * 1e-13;
+
+            const eqInterp = [];
+            const chInterp = [];
+            const eqErr = [];
+            const chErr = [];
+
+            let eqErrSq = 0;
+            let chErrSq = 0;
+
+            for (let i = 0; i < denseT.length; i++) {
+                const t = denseT[i];
+                const fx = truth[i];
+                const pe = baryEval(t, eqNodes, eqVals, eqW, eps);
+                const pc = baryEval(t, chNodes, chVals, chW, eps);
+
+                const ee = Math.abs(fx - pe);
+                const ec = Math.abs(fx - pc);
+
+                eqInterp.push(pe);
+                chInterp.push(pc);
+                eqErr.push(Math.max(ee, 1e-15));
+                chErr.push(Math.max(ec, 1e-15));
+                eqErrSq += ee * ee;
+                chErrSq += ec * ec;
+            }
+
+            const eqMax = maxOf(eqErr);
+            const chMax = maxOf(chErr);
+
+            return {
+                denseT,
+                truth,
+                eqInterp,
+                chInterp,
+                eqErr,
+                chErr,
+                eqNodes,
+                chNodes,
+                eqVals,
+                chVals,
+                eqMax,
+                chMax,
+                eqRms: Math.sqrt(eqErrSq / denseT.length),
+                chRms: Math.sqrt(chErrSq / denseT.length)
+            };
+        }
+
+        function computeConvergence(ref, t0, t1) {
+            const denseT = linspace(t0, t1, DENSE_COUNT);
+            const truth = denseT.map(t => sampleRef(ref, t));
+            const eps = (t1 - t0) * 1e-13;
+
+            const rows = [];
+
+            for (let n = N_MIN; n <= N_MAX; n++) {
+                const eqNodes = equispacedNodes(n, t0, t1);
+                const chNodes = chebLobattoNodes(n, t0, t1);
+                const eqVals = eqNodes.map(t => sampleRef(ref, t));
+                const chVals = chNodes.map(t => sampleRef(ref, t));
+                const eqW = baryWeights(eqNodes);
+                const chW = baryWeights(chNodes);
+
+                let eqMax = 0;
+                let chMax = 0;
+                let eqSq = 0;
+                let chSq = 0;
+
+                for (let i = 0; i < denseT.length; i++) {
+                    const t = denseT[i];
+                    const fx = truth[i];
+
+                    const ee = Math.abs(fx - baryEval(t, eqNodes, eqVals, eqW, eps));
+                    const ec = Math.abs(fx - baryEval(t, chNodes, chVals, chW, eps));
+
+                    eqMax = Math.max(eqMax, ee);
+                    chMax = Math.max(chMax, ec);
+                    eqSq += ee * ee;
+                    chSq += ec * ec;
+                }
+
+                rows.push({
+                    n,
+                    eqMax: Math.max(eqMax, 1e-15),
+                    chMax: Math.max(chMax, 1e-15),
+                    eqRms: Math.max(Math.sqrt(eqSq / denseT.length), 1e-15),
+                    chRms: Math.max(Math.sqrt(chSq / denseT.length), 1e-15)
+                });
+            }
+
+            return rows;
+        }
+
+        function getConvergence(mu, t0, t1) {
+            const key = `${quantizeMu(mu).toFixed(2)}|${t0.toFixed(2)}|${t1.toFixed(2)}`;
+            if (!convCache.has(key)) {
+                const ref = getReference(mu);
+                convCache.set(key, computeConvergence(ref, t0, t1));
+            }
+            return convCache.get(key);
+        }
+
+        function tailSlope(rows, key, k = 10) {
+            const use = rows.slice(-Math.min(k, rows.length));
+            const pts = use.map(d => ({ x: d.n, y: Math.log10(d[key]) }));
+            const n = pts.length;
+            let sx = 0, sy = 0, sxx = 0, sxy = 0;
+            for (const p of pts) {
+                sx += p.x;
+                sy += p.y;
+                sxx += p.x * p.x;
+                sxy += p.x * p.y;
+            }
+            const den = n * sxx - sx * sx;
+            if (Math.abs(den) < 1e-12) return NaN;
+            return (n * sxy - sx * sy) / den;
+        }
+
+        function makeChart(containerId, vw, vh, xLabel, yLabel) {
+            const M = { top: 22, right: 22, bottom: 48, left: 60 };
+            const PW = vw - M.left - M.right;
+            const PH = vh - M.top - M.bottom;
+
+            const svg = d3.select(`#${containerId}`).append('svg')
+                .attr('viewBox', `0 0 ${vw} ${vh}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+
+            const g = svg.append('g').attr('transform', `translate(${M.left},${M.top})`);
+
+            const gridX = g.append('g').attr('class', 'grid').attr('transform', `translate(0,${PH})`);
+            const gridY = g.append('g').attr('class', 'grid');
+
+            const axisX = g.append('g').attr('class', 'axis').attr('transform', `translate(0,${PH})`);
+            const axisY = g.append('g').attr('class', 'axis');
+
+            g.append('text').attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('x', PW / 2)
+                .attr('y', PH + 40)
+                .text(xLabel);
+
+            g.append('text').attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', -PH / 2)
+                .attr('y', -44)
+                .text(yLabel);
+
+            return { svg, g, gridX, gridY, axisX, axisY, PW, PH };
+        }
+
+        function updateAxes(chart, xSc, ySc, xTicks, yTicks, yFmt = null) {
+            chart.gridX.call(d3.axisBottom(xSc).ticks(xTicks).tickSize(-chart.PH).tickFormat(''));
+            chart.gridY.call(d3.axisLeft(ySc).ticks(yTicks).tickSize(-chart.PW).tickFormat(''));
+
+            chart.axisX.call(d3.axisBottom(xSc).ticks(xTicks));
+            const yAxis = d3.axisLeft(ySc).ticks(yTicks);
+            if (yFmt) yAxis.tickFormat(yFmt);
+            chart.axisY.call(yAxis);
+        }
+
+        const curveChart = makeChart('curve-container', 560, 400, 't', 'x(t)');
+        const errorChart = makeChart('error-container', 560, 400, 't', '|x(t) - p_n(t)|');
+        const convChart = makeChart('conv-container', 1120, 390, 'degree n', 'max error (L_inf)');
+
+        const curveTruthPath = curveChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.truth).attr('stroke-width', 2.2);
+        const curveEqPath = curveChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.equi).attr('stroke-width', 2.2);
+        const curveChPath = curveChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.cheb).attr('stroke-width', 2.2);
+        const eqNodesLayer = curveChart.g.append('g');
+        const chNodesLayer = curveChart.g.append('g');
+
+        const errEqPath = errorChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.equi).attr('stroke-width', 2.2);
+        const errChPath = errorChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.cheb).attr('stroke-width', 2.2);
+
+        const convEqPath = convChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.equi).attr('stroke-width', 2.5);
+        const convChPath = convChart.g.append('path').attr('fill', 'none').attr('stroke', COLORS.cheb).attr('stroke-width', 2.5);
+        const convCursor = convChart.g.append('line')
+            .attr('stroke', '#aaa')
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '4,3');
+        const convEqDot = convChart.g.append('circle').attr('r', 5).attr('fill', COLORS.equi).attr('stroke', '#111').attr('stroke-width', 1.2);
+        const convChDot = convChart.g.append('circle').attr('r', 5).attr('fill', COLORS.cheb).attr('stroke', '#111').attr('stroke-width', 1.2);
+
+        const muSlider = document.getElementById('mu-slider');
+        const muDisplay = document.getElementById('mu-display');
+        const muSwatch = document.getElementById('mu-swatch');
+        const nSlider = document.getElementById('n-slider');
+        const nDisplay = document.getElementById('n-display');
+        const windowSelect = document.getElementById('window-select');
+        const statusEl = document.getElementById('status');
+
+        let redrawToken = 0;
+
+        function setMetrics(single, convRows, t0, t1) {
+            const n = +nSlider.value;
+            const ratio = single.eqMax / Math.max(single.chMax, 1e-16);
+
+            document.getElementById('interval-text').textContent = `[${t0.toFixed(2)}, ${t1.toFixed(2)}]`;
+            document.getElementById('max-equi').textContent = single.eqMax.toExponential(3);
+            document.getElementById('max-cheb').textContent = single.chMax.toExponential(3);
+            document.getElementById('ratio-text').textContent = `${ratio.toFixed(2)}x at n=${n}`;
+
+            const sEq = tailSlope(convRows, 'eqMax');
+            const sCh = tailSlope(convRows, 'chMax');
+            document.getElementById('slope-equi').textContent = Number.isFinite(sEq) ? sEq.toFixed(3) : '-';
+            document.getElementById('slope-cheb').textContent = Number.isFinite(sCh) ? sCh.toFixed(3) : '-';
+        }
+
+        function redraw() {
+            const mu = quantizeMu(+muSlider.value);
+            const n = +nSlider.value;
+            const w = +windowSelect.value;
+
+            const t1 = T_TOTAL;
+            const t0 = Math.max(T_SKIP, t1 - w);
+
+            muDisplay.textContent = mu.toFixed(2);
+            nDisplay.textContent = `${n}`;
+            muSwatch.style.backgroundColor = muColor(mu);
+
+            const ref = getReference(mu);
+            const single = computeSingle(ref, t0, t1, n);
+            const convRows = getConvergence(mu, t0, t1);
+
+            // Chart 1: truth + interpolants
+            const xScCurve = d3.scaleLinear().domain([t0, t1]).range([0, curveChart.PW]);
+            const yMinCurve = minOf([...single.truth, ...single.eqInterp, ...single.chInterp]);
+            const yMaxCurve = maxOf([...single.truth, ...single.eqInterp, ...single.chInterp]);
+            const yPadCurve = (yMaxCurve - yMinCurve) * 0.12 || 0.2;
+            const yScCurve = d3.scaleLinear().domain([yMinCurve - yPadCurve, yMaxCurve + yPadCurve]).range([curveChart.PH, 0]).nice();
+
+            updateAxes(curveChart, xScCurve, yScCurve, 6, 6);
+
+            const lineCurve = d3.line().x((d, i) => xScCurve(single.denseT[i])).y(d => yScCurve(d));
+            curveTruthPath.datum(single.truth).attr('d', lineCurve);
+            curveEqPath.datum(single.eqInterp).attr('d', lineCurve);
+            curveChPath.datum(single.chInterp).attr('d', lineCurve);
+
+            eqNodesLayer.selectAll('circle')
+                .data(single.eqNodes.map((t, i) => ({ t, x: single.eqVals[i] })))
+                .join('circle')
+                .attr('cx', d => xScCurve(d.t))
+                .attr('cy', d => yScCurve(d.x))
+                .attr('r', 2.6)
+                .attr('fill', 'none')
+                .attr('stroke', COLORS.equi)
+                .attr('stroke-width', 1.2)
+                .attr('opacity', 0.85);
+
+            chNodesLayer.selectAll('circle')
+                .data(single.chNodes.map((t, i) => ({ t, x: single.chVals[i] })))
+                .join('circle')
+                .attr('cx', d => xScCurve(d.t))
+                .attr('cy', d => yScCurve(d.x))
+                .attr('r', 2.3)
+                .attr('fill', COLORS.cheb)
+                .attr('stroke', 'none')
+                .attr('opacity', 0.92);
+
+            // Chart 2: pointwise error
+            const xScErr = d3.scaleLinear().domain([t0, t1]).range([0, errorChart.PW]);
+            const errMin = Math.max(1e-15, Math.min(minOf(single.eqErr), minOf(single.chErr)) * 0.7);
+            const errMax = Math.max(1e-12, Math.max(maxOf(single.eqErr), maxOf(single.chErr)) * 1.3);
+            const yScErr = d3.scaleLog().domain([errMin, errMax]).range([errorChart.PH, 0]);
+
+            updateAxes(errorChart, xScErr, yScErr, 6, 6, d3.format('.0e'));
+
+            const lineErr = d3.line()
+                .x((d, i) => xScErr(single.denseT[i]))
+                .y(d => yScErr(d));
+
+            errEqPath.datum(single.eqErr).attr('d', lineErr);
+            errChPath.datum(single.chErr).attr('d', lineErr);
+
+            // Chart 3: convergence
+            const nSc = d3.scaleLinear().domain([N_MIN, N_MAX]).range([0, convChart.PW]);
+            const convMin = Math.max(1e-15, Math.min(d3.min(convRows, d => d.eqMax), d3.min(convRows, d => d.chMax)) * 0.7);
+            const convMax = Math.max(1e-12, Math.max(d3.max(convRows, d => d.eqMax), d3.max(convRows, d => d.chMax)) * 1.3);
+            const convY = d3.scaleLog().domain([convMin, convMax]).range([convChart.PH, 0]);
+
+            updateAxes(convChart, nSc, convY, 8, 6, d3.format('.0e'));
+
+            const lineConv = d3.line().x(d => nSc(d.n)).y(d => convY(d.val));
+            convEqPath.datum(convRows.map(d => ({ n: d.n, val: d.eqMax }))).attr('d', lineConv);
+            convChPath.datum(convRows.map(d => ({ n: d.n, val: d.chMax }))).attr('d', lineConv);
+
+            const rowN = convRows.find(d => d.n === n);
+            if (rowN) {
+                const cx = nSc(n);
+                convCursor.attr('x1', cx).attr('x2', cx).attr('y1', 0).attr('y2', convChart.PH);
+                convEqDot.attr('cx', cx).attr('cy', convY(rowN.eqMax));
+                convChDot.attr('cx', cx).attr('cy', convY(rowN.chMax));
+            }
+
+            setMetrics(single, convRows, t0, t1);
+            statusEl.textContent = '';
+        }
+
+        function requestRedraw() {
+            const token = ++redrawToken;
+            statusEl.textContent = 'computing...';
+            setTimeout(() => {
+                if (token !== redrawToken) return;
+                redraw();
+            }, 0);
+        }
+
+        muSlider.addEventListener('input', requestRedraw);
+        nSlider.addEventListener('input', requestRedraw);
+        windowSelect.addEventListener('change', requestRedraw);
+
+        requestRedraw();
+    </script>
+
+    <div class="modal-overlay" id="info-modal">
+        <div class="modal-box">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <h2>Research Context: Why Chebyshev + Barycentric?</h2>
+            <p>This page interpolates the Van der Pol trajectory x(t) itself, not a toy function. The gray curve is a high-resolution RK4 reference solution on a post-transient time window, and both colored curves are degree-n barycentric interpolants built from sampled values of that same trajectory.</p>
+            <p><strong>Equispaced nodes</strong> tend to amplify boundary oscillations at higher n (Runge-type behavior), while <strong>Chebyshev-Lobatto nodes</strong> cluster near interval endpoints and typically reduce the worst-case interpolation error. Barycentric evaluation avoids explicitly solving Vandermonde systems, so it is the standard stable implementation for high-order interpolation.</p>
+            <p><strong>Research significance:</strong> the convergence plot gives direct evidence of how node choice affects error decay as n increases for your Van der Pol data. This supports method selection when building polynomial surrogates used in downstream analysis, parameter studies, or reduced-order modeling workflows.</p>
+        </div>
+    </div>
+    <script>
+        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
+        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
+        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
+    </script>
+</body>
+</html>
