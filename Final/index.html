@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Van der Pol Oscillator — Effect of μ</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: sans-serif;
+            background-color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #fff;
+        }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 4px;
+            font-size: 1.4rem;
+            letter-spacing: 0.03em;
+        }
+        .subtitle {
+            font-size: 0.82rem;
+            color: #888;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+        #controls {
+            margin-bottom: 18px;
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        label {
+            font-size: 14px;
+        }
+        #mu-slider {
+            width: 240px;
+            cursor: pointer;
+        }
+        #mu-display {
+            font-weight: bold;
+            min-width: 36px;
+            display: inline-block;
+        }
+        #mu-swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-left: 4px;
+            border: 1px solid #555;
+        }
+        #play-btn {
+            background-color: #2b83ba;
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #play-btn:hover {
+            background-color: #3e9ed6;
+        }
+        #charts {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .chart-panel {
+            flex: 1 1 460px;
+            max-width: 580px;
+        }
+        .chart-panel h2 {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #bbb;
+            margin: 0 0 6px 0;
+            font-weight: normal;
+        }
+        .chart-panel svg {
+            border: 1px solid #444;
+            background-color: #111;
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .axis path, .axis line { stroke: #555; }
+        .axis text { fill: #999; font-size: 11px; }
+        .grid line { stroke: #2a2a2a; stroke-dasharray: 2,2; }
+        .grid path { stroke: none; }
+        .crosshair { stroke: #333; stroke-dasharray: 4,3; }
+        .axis-label { fill: #888; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>Van der Pol Oscillator — Effect of μ</h1>
+    <p class="subtitle">x″ − μ(1 − x²)x′ + x = 0 &nbsp;|&nbsp; Initial conditions: x(0) = 2, x′(0) = 0</p>
+
+    <div id="controls">
+        <label>
+            μ = <span id="mu-display">1.00</span>
+            <span id="mu-swatch"></span>
+        </label>
+        <input type="range" id="mu-slider" min="0.10" max="5.00" step="0.05" value="1.00">
+        <button id="play-btn">&#9654; Play</button>
+    </div>
+
+    <div id="charts">
+        <div class="chart-panel">
+            <h2>Phase Portrait &nbsp;(x vs dx/dt)</h2>
+            <div id="phase-container"></div>
+        </div>
+        <div class="chart-panel">
+            <h2>Time Series &nbsp;(x vs t)</h2>
+            <div id="time-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // ── Constants ────────────────────────────────────────────────────────────
+        const H           = 0.02;
+        const T_TOTAL     = 60;
+        const T_TRANSIENT = 30;
+        const N_STEPS     = T_TOTAL / H;
+        const N_TRANSIENT = T_TRANSIENT / H;
+        const MU_MIN      = 0.10;
+        const MU_MAX      = 5.00;
+        const MU_STEP     = 0.05;
+
+        // ── RK4 Solver ───────────────────────────────────────────────────────────
+        function vdpRHS(x, y, mu) {
+            return [y, mu * (1 - x * x) * y - x];
+        }
+
+        function rk4Step(x, y, mu, h) {
+            const [k1x, k1y] = vdpRHS(x,             y,             mu);
+            const [k2x, k2y] = vdpRHS(x + h/2*k1x,  y + h/2*k1y,  mu);
+            const [k3x, k3y] = vdpRHS(x + h/2*k2x,  y + h/2*k2y,  mu);
+            const [k4x, k4y] = vdpRHS(x + h*k3x,    y + h*k3y,    mu);
+            return [
+                x + (h/6) * (k1x + 2*k2x + 2*k3x + k4x),
+                y + (h/6) * (k1y + 2*k2y + 2*k3y + k4y)
+            ];
+        }
+
+        function solveVdp(mu) {
+            let px = 2.0, py = 0.0;
+            const phasePoints = [];
+            const timePoints  = [];
+            for (let i = 0; i < N_STEPS; i++) {
+                [px, py] = rk4Step(px, py, mu, H);
+                if (i >= N_TRANSIENT) {
+                    phasePoints.push([px, py]);
+                    timePoints.push([(i - N_TRANSIENT) * H, px]);
+                }
+            }
+            return { phasePoints, timePoints };
+        }
+
+        // ── Frame Cache ──────────────────────────────────────────────────────────
+        const frameCache = new Map();
+
+        function quantize(mu) {
+            return Math.round(mu / MU_STEP) * MU_STEP;
+        }
+
+        function getFrame(mu) {
+            const key = quantize(mu).toFixed(2);
+            if (!frameCache.has(key)) {
+                frameCache.set(key, solveVdp(quantize(mu)));
+            }
+            return frameCache.get(key);
+        }
+
+        // ── Color Scale ──────────────────────────────────────────────────────────
+        const muColor = d3.scaleSequential()
+            .domain([MU_MIN, MU_MAX])
+            .interpolator(d3.interpolatePlasma);
+
+        // ── D3 Chart Setup ───────────────────────────────────────────────────────
+        const MARGIN  = { top: 22, right: 22, bottom: 48, left: 58 };
+        const VB_W    = 560;
+        const VB_H    = 400;
+        const PLOT_W  = VB_W - MARGIN.left - MARGIN.right;
+        const PLOT_H  = VB_H - MARGIN.top  - MARGIN.bottom;
+
+        function buildChart(containerId) {
+            const svg = d3.select(`#${containerId}`)
+                .append('svg')
+                .attr('viewBox', `0 0 ${VB_W} ${VB_H}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+            return svg.append('g')
+                .attr('transform', `translate(${MARGIN.left},${MARGIN.top})`);
+        }
+
+        function addGrid(g, xScale, yScale, xTicks, yTicks) {
+            g.append('g').attr('class', 'grid')
+                .attr('transform', `translate(0,${PLOT_H})`)
+                .call(d3.axisBottom(xScale).ticks(xTicks).tickSize(-PLOT_H).tickFormat(''));
+            g.append('g').attr('class', 'grid')
+                .call(d3.axisLeft(yScale).ticks(yTicks).tickSize(-PLOT_W).tickFormat(''));
+        }
+
+        function addAxes(g, xScale, yScale, xTicks, yTicks, xLabel, yLabel) {
+            g.append('g').attr('class', 'axis')
+                .attr('transform', `translate(0,${PLOT_H})`)
+                .call(d3.axisBottom(xScale).ticks(xTicks));
+            g.append('g').attr('class', 'axis')
+                .call(d3.axisLeft(yScale).ticks(yTicks));
+            // x-axis label
+            g.append('text').attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('x', PLOT_W / 2)
+                .attr('y', PLOT_H + 40)
+                .text(xLabel);
+            // y-axis label
+            g.append('text').attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', -PLOT_H / 2)
+                .attr('y', -46)
+                .text(yLabel);
+        }
+
+        function addCrosshair(g, xScale, yScale) {
+            g.append('line').attr('class', 'crosshair')
+                .attr('x1', xScale(0)).attr('x2', xScale(0))
+                .attr('y1', 0).attr('y2', PLOT_H);
+            g.append('line').attr('class', 'crosshair')
+                .attr('x1', 0).attr('x2', PLOT_W)
+                .attr('y1', yScale(0)).attr('y2', yScale(0));
+        }
+
+        // Phase portrait
+        const phaseXScale = d3.scaleLinear().domain([-3.5, 3.5]).range([0, PLOT_W]);
+        const phaseYScale = d3.scaleLinear().domain([-7,   7  ]).range([PLOT_H, 0]);
+        const phaseG = buildChart('phase-container');
+        addGrid(phaseG, phaseXScale, phaseYScale, 6, 6);
+        addAxes(phaseG, phaseXScale, phaseYScale, 6, 6, 'x  (position)', 'dx/dt  (velocity)');
+        addCrosshair(phaseG, phaseXScale, phaseYScale);
+        const phasePath = phaseG.append('path')
+            .attr('fill', 'none')
+            .attr('stroke-width', 1.8)
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round');
+
+        // Time series
+        const timeXScale = d3.scaleLinear().domain([0, T_TOTAL - T_TRANSIENT]).range([0, PLOT_W]);
+        const timeYScale = d3.scaleLinear().domain([-3.5, 3.5]).range([PLOT_H, 0]);
+        const timeG = buildChart('time-container');
+        addGrid(timeG, timeXScale, timeYScale, 6, 6);
+        addAxes(timeG, timeXScale, timeYScale, 6, 6, 't  (time)', 'x  (position)');
+        addCrosshair(timeG, timeXScale, timeYScale);
+        const timePath = timeG.append('path')
+            .attr('fill', 'none')
+            .attr('stroke-width', 1.5)
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round');
+
+        // D3 line generators
+        const phaseLine = d3.line()
+            .x(d => phaseXScale(d[0]))
+            .y(d => phaseYScale(d[1]));
+
+        const timeLine = d3.line()
+            .x(d => timeXScale(d[0]))
+            .y(d => timeYScale(d[1]));
+
+        // ── Render ───────────────────────────────────────────────────────────────
+        const muDisplay = document.getElementById('mu-display');
+        const muSwatch  = document.getElementById('mu-swatch');
+
+        function renderFrame(mu) {
+            const qmu = quantize(mu);
+            const { phasePoints, timePoints } = getFrame(qmu);
+            const color = muColor(qmu);
+
+            phasePath.attr('stroke', color).attr('d', phaseLine(phasePoints));
+            timePath.attr('stroke', color).attr('d', timeLine(timePoints));
+
+            muDisplay.textContent = qmu.toFixed(2);
+            muSwatch.style.backgroundColor = color;
+        }
+
+        // ── Slider ───────────────────────────────────────────────────────────────
+        const slider  = document.getElementById('mu-slider');
+        const playBtn = document.getElementById('play-btn');
+        let rafSliderId = null;
+
+        slider.addEventListener('input', function () {
+            const mu = +this.value;
+            if (rafSliderId) cancelAnimationFrame(rafSliderId);
+            rafSliderId = requestAnimationFrame(() => renderFrame(mu));
+        });
+
+        // ── Play / Pause ─────────────────────────────────────────────────────────
+        let playing = false;
+        let playRaf = null;
+
+        function stopPlay() {
+            playing = false;
+            if (playRaf) { cancelAnimationFrame(playRaf); playRaf = null; }
+            playBtn.textContent = '▶ Play';
+        }
+
+        playBtn.addEventListener('click', () => {
+            if (playing) { stopPlay(); return; }
+            playing = true;
+            playBtn.textContent = '⏸ Pause';
+
+            let mu = +slider.value;
+            if (mu >= MU_MAX) mu = MU_MIN;
+
+            const tick = () => {
+                mu = Math.round(mu / MU_STEP) * MU_STEP;
+                slider.value = mu;
+                renderFrame(mu);
+                if (mu >= MU_MAX) { stopPlay(); return; }
+                mu = Math.min(MU_MAX, mu + MU_STEP);
+                playRaf = requestAnimationFrame(tick);
+            };
+            tick();
+        });
+
+        // ── Init ─────────────────────────────────────────────────────────────────
+        renderFrame(1.0);
+
+        // Prewarm cache in background chunks
+        (function prewarm() {
+            const steps = [];
+            for (let mu = MU_MIN; mu <= MU_MAX + 0.001; mu += MU_STEP) {
+                steps.push(+(Math.round(mu / MU_STEP) * MU_STEP).toFixed(2));
+            }
+            let i = 0;
+            function warmChunk() {
+                const end = Math.min(i + 5, steps.length);
+                for (; i < end; i++) getFrame(steps[i]);
+                if (i < steps.length) setTimeout(warmChunk, 0);
+            }
+            setTimeout(warmChunk, 80);
+        })();
+    </script>
+</body>
+</html>
