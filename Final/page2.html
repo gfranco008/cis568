@@ -113,6 +113,17 @@
         .grid path { stroke: none; }
         .crosshair { stroke: #2e2e2e; stroke-dasharray: 4,3; }
         .axis-label { fill: #888; font-size: 12px; }
+        .info-btn { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:#2b83ba; color:#fff; border:none; font-size:13px; font-weight:bold; cursor:pointer; vertical-align:middle; margin-left:8px; line-height:1; flex-shrink:0; }
+        .info-btn:hover { background:#3e9ed6; }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:100; align-items:center; justify-content:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#242424; border:1px solid #555; border-radius:8px; padding:28px 32px; max-width:520px; width:90%; position:relative; color:#ddd; line-height:1.6; }
+        .modal-box h2 { margin-top:0; color:#fff; font-size:1.1rem; margin-bottom:10px; }
+        .modal-close { position:absolute; top:10px; right:14px; background:none; border:none; color:#888; font-size:22px; cursor:pointer; line-height:1; padding:0; }
+        .modal-close:hover { color:#fff; }
+        .modal-box p { margin:0 0 12px 0; font-size:0.9rem; }
+        .modal-box p:last-child { margin-bottom:0; }
+        .modal-box strong { color:#fff; }
     </style>
 </head>
 <body>
@@ -123,7 +134,7 @@
         <a href="page4.html">Vector Field</a> &nbsp;|&nbsp;
         <a href="page5.html">Amplitude &amp; Period</a>
     </nav>
-    <h1>Van der Pol Oscillator — Time Evolution</h1>
+    <h1>Van der Pol Oscillator — Time Evolution <button class="info-btn" aria-label="About this visualization">?</button></h1>
     <p class="subtitle">
         x″ − μ(1 − x²)x′ + x = 0 &nbsp;|&nbsp;
         Fixed μ, initial conditions: x(0) = 0.5, x′(0) = 0
@@ -403,6 +414,20 @@
 
         // ── Init ──────────────────────────────────────────────────────────────────
         resetFor(getMu());
+    </script>
+
+    <div class="modal-overlay" id="info-modal">
+        <div class="modal-box">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <h2>Time Evolution from an Initial Condition</h2>
+            <p>Starting from x(0) = 0.5, x′(0) = 0 — a point <em>inside</em> the limit cycle — the trajectory spirals outward and gradually settles onto the closed limit cycle. The faint dashed curve shows the reference limit cycle. Changing μ restarts the simulation and reshapes the attractor; the time scrubber lets you pause at any moment.</p>
+            <p><strong>Research significance:</strong> Transient dynamics reveal how quickly a system converges to steady state. For small μ convergence is slow (weak effective damping); for large μ it is rapid. Characterizing this timescale is essential for ODE solver validation and for understanding how fast a parametric system "forgets" its initial conditions — a key question in stability and sensitivity analysis.</p>
+        </div>
+    </div>
+    <script>
+        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
+        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
+        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
     </script>
 </body>
 </html>

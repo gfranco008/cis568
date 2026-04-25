@@ -35,6 +35,17 @@
         #legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; justify-content:center; }
         .leg { display:flex; align-items:center; gap:6px; font-size:12px; color:#bbb; }
         .leg-line { width:22px; height:3px; border-radius:1px; }
+        .info-btn { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:#2b83ba; color:#fff; border:none; font-size:13px; font-weight:bold; cursor:pointer; vertical-align:middle; margin-left:8px; line-height:1; flex-shrink:0; }
+        .info-btn:hover { background:#3e9ed6; }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:100; align-items:center; justify-content:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#242424; border:1px solid #555; border-radius:8px; padding:28px 32px; max-width:520px; width:90%; position:relative; color:#ddd; line-height:1.6; }
+        .modal-box h2 { margin-top:0; color:#fff; font-size:1.1rem; margin-bottom:10px; }
+        .modal-close { position:absolute; top:10px; right:14px; background:none; border:none; color:#888; font-size:22px; cursor:pointer; line-height:1; padding:0; }
+        .modal-close:hover { color:#fff; }
+        .modal-box p { margin:0 0 12px 0; font-size:0.9rem; }
+        .modal-box p:last-child { margin-bottom:0; }
+        .modal-box strong { color:#fff; }
     </style>
 </head>
 <body>
@@ -45,7 +56,7 @@
         <a href="page4.html">Vector Field</a> &nbsp;|&nbsp;
         <a href="page5.html">Amplitude &amp; Period</a>
     </nav>
-    <h1>Van der Pol — Basin of Attraction</h1>
+    <h1>Van der Pol — Basin of Attraction <button class="info-btn" aria-label="About this visualization">?</button></h1>
     <p class="subtitle">
         x″ − μ(1 − x²)x′ + x = 0 &nbsp;|&nbsp;
         All trajectories spiral toward the same limit cycle, regardless of starting point
@@ -244,6 +255,20 @@
         });
 
         resetFor(1.0);
+    </script>
+
+    <div class="modal-overlay" id="info-modal">
+        <div class="modal-box">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <h2>The Limit Cycle as a Global Attractor</h2>
+            <p>Eight trajectories are launched from very different starting points — four inside the limit cycle (spiraling outward) and four outside (spiraling inward). Dashed circles mark each initial position; colored dots track the current location in real time. Despite the radically different starting points, all eight paths converge to the same closed curve.</p>
+            <p><strong>Research significance:</strong> The Van der Pol limit cycle is a <strong>global attractor</strong> — every trajectory except the unstable equilibrium at the origin is drawn to it, regardless of initial energy or position. This robustness distinguishes nonlinear self-sustained oscillators from conservative systems where motion depends entirely on initial conditions. Demonstrating global attraction numerically supports theoretical claims about solution robustness across parameter regimes.</p>
+        </div>
+    </div>
+    <script>
+        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
+        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
+        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
     </script>
 </body>
 </html>

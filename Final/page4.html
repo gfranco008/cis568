@@ -25,6 +25,17 @@
         .grid path  { stroke:none; }
         .crosshair  { stroke:#2e2e2e; stroke-dasharray:4,3; }
         .axis-label { fill:#888; font-size:12px; }
+        .info-btn { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:#2b83ba; color:#fff; border:none; font-size:13px; font-weight:bold; cursor:pointer; vertical-align:middle; margin-left:8px; line-height:1; flex-shrink:0; }
+        .info-btn:hover { background:#3e9ed6; }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:100; align-items:center; justify-content:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#242424; border:1px solid #555; border-radius:8px; padding:28px 32px; max-width:520px; width:90%; position:relative; color:#ddd; line-height:1.6; }
+        .modal-box h2 { margin-top:0; color:#fff; font-size:1.1rem; margin-bottom:10px; }
+        .modal-close { position:absolute; top:10px; right:14px; background:none; border:none; color:#888; font-size:22px; cursor:pointer; line-height:1; padding:0; }
+        .modal-close:hover { color:#fff; }
+        .modal-box p { margin:0 0 12px 0; font-size:0.9rem; }
+        .modal-box p:last-child { margin-bottom:0; }
+        .modal-box strong { color:#fff; }
     </style>
 </head>
 <body>
@@ -35,7 +46,7 @@
         Vector Field &nbsp;|&nbsp;
         <a href="page5.html">Amplitude &amp; Period</a>
     </nav>
-    <h1>Van der Pol — Phase Plane: Vector Field &amp; Nullclines</h1>
+    <h1>Van der Pol — Phase Plane: Vector Field &amp; Nullclines <button class="info-btn" aria-label="About this visualization">?</button></h1>
     <p class="subtitle">
         x″ − μ(1 − x²)x′ + x = 0 &nbsp;|&nbsp;
         Arrows show flow direction · Nullclines mark where dx/dt = 0 or dx′/dt = 0
@@ -241,6 +252,20 @@
         const muSlider = document.getElementById('mu-slider');
         muSlider.addEventListener('input', () => update(+muSlider.value));
         update(1.0);
+    </script>
+
+    <div class="modal-overlay" id="info-modal">
+        <div class="modal-box">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <h2>Phase Plane: Vector Field and Nullclines</h2>
+            <p>Arrows show the flow direction at each point in the phase plane, colored by speed (dark = slow, bright = fast). The <strong style="color:#00bcd4">cyan line</strong> is the x-nullcline (dx/dt = y′ = 0). The <strong style="color:#ff9800">orange S-curve</strong> is the y-nullcline (dy′/dt = 0, i.e. y′ = x / μ(1−x²)). Their only intersection is the origin — an unstable equilibrium marked by the white circle. The dashed curve is the limit cycle. Drag μ to see how all three elements reshape together.</p>
+            <p><strong>Research significance:</strong> Nullcline analysis is the primary geometric tool for understanding 2D ODEs without solving them analytically. The limit cycle's existence is topologically guaranteed by the <strong>Poincaré–Bendixson theorem</strong> whenever an unstable focus is enclosed by a bounded trapping region. This visualization makes that argument visually concrete and shows how the phase-plane geometry — and therefore the system's qualitative behavior — changes with μ.</p>
+        </div>
+    </div>
+    <script>
+        document.querySelector('.info-btn').addEventListener('click', () => document.getElementById('info-modal').classList.add('active'));
+        document.getElementById('modal-close').addEventListener('click', () => document.getElementById('info-modal').classList.remove('active'));
+        document.getElementById('info-modal').addEventListener('click', e => { if (e.target.id === 'info-modal') e.target.classList.remove('active'); });
     </script>
 </body>
 </html>
