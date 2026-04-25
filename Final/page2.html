@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Van der Pol — Time Evolution</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: sans-serif;
+            background-color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #fff;
+        }
+        nav {
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 14px;
+            font-size: 13px;
+        }
+        nav a {
+            color: #2b83ba;
+            text-decoration: none;
+        }
+        nav a:hover { text-decoration: underline; }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 4px;
+            font-size: 1.4rem;
+            letter-spacing: 0.03em;
+        }
+        .subtitle {
+            font-size: 0.82rem;
+            color: #888;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+        #controls {
+            margin-bottom: 18px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        label { font-size: 14px; }
+        #mu-slider, #time-slider { cursor: pointer; }
+        #mu-slider  { width: 180px; }
+        #time-slider { width: 260px; }
+        #mu-display {
+            font-weight: bold;
+            min-width: 36px;
+            display: inline-block;
+        }
+        #mu-swatch {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-left: 4px;
+            border: 1px solid #555;
+        }
+        #t-display {
+            font-weight: bold;
+            min-width: 42px;
+            display: inline-block;
+        }
+        .btn {
+            background-color: #2b83ba;
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover { background-color: #3e9ed6; }
+        #reset-btn { background-color: #555; }
+        #reset-btn:hover { background-color: #777; }
+        #charts {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .chart-panel {
+            flex: 1 1 460px;
+            max-width: 580px;
+        }
+        .chart-panel h2 {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #bbb;
+            margin: 0 0 6px 0;
+            font-weight: normal;
+        }
+        .chart-panel svg {
+            border: 1px solid #444;
+            background-color: #111;
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .axis path, .axis line { stroke: #555; }
+        .axis text { fill: #999; font-size: 11px; }
+        .grid line { stroke: #2a2a2a; stroke-dasharray: 2,2; }
+        .grid path { stroke: none; }
+        .crosshair { stroke: #2e2e2e; stroke-dasharray: 4,3; }
+        .axis-label { fill: #888; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html">← Effect of μ</a>
+        &nbsp;|&nbsp; Van der Pol — Time Evolution
+    </nav>
+    <h1>Van der Pol Oscillator — Time Evolution</h1>
+    <p class="subtitle">
+        x″ − μ(1 − x²)x′ + x = 0 &nbsp;|&nbsp;
+        Fixed μ, initial conditions: x(0) = 0.5, x′(0) = 0
+    </p>
+
+    <div id="controls">
+        <label>
+            μ = <span id="mu-display">1.00</span>
+            <span id="mu-swatch"></span>
+        </label>
+        <input type="range" id="mu-slider" min="0.10" max="5.00" step="0.05" value="1.00">
+
+        <label>t = <span id="t-display">0.00</span></label>
+        <input type="range" id="time-slider" min="0" max="1000" step="1" value="0">
+
+        <button id="play-btn" class="btn">&#9654; Play</button>
+        <button id="reset-btn" class="btn">&#8635; Reset</button>
+    </div>
+
+    <div id="charts">
+        <div class="chart-panel">
+            <h2>Phase Portrait &nbsp;(y vs y')</h2>
+            <div id="phase-container"></div>
+        </div>
+        <div class="chart-panel">
+            <h2>Time Series &nbsp;(x vs t)</h2>
+            <div id="time-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // ── Constants ────────────────────────────────────────────────────────────
+        const H       = 0.02;
+        const T_MAX   = 50;          // integrate to t=20 (visible window)
+        const N_STEPS = T_MAX / H;   // 1000 steps
+        const SPEED   = 4;           // steps advanced per animation frame
+        const X0      = 0.5, Y0 = 0; // initial conditions (inside limit cycle)
+
+        // Limit-cycle reference: integrate from [2,0] for 60s, keep last 30s
+        const LC_T_TOTAL     = 60;
+        const LC_T_TRANSIENT = 30;
+        const LC_N           = LC_T_TOTAL / H;
+        const LC_N_SKIP      = LC_T_TRANSIENT / H;
+
+        // ── RK4 ──────────────────────────────────────────────────────────────────
+        function vdpRHS(x, y, mu) {
+            return [y, mu * (1 - x * x) * y - x];
+        }
+
+        function rk4Step(x, y, mu, h) {
+            const [k1x, k1y] = vdpRHS(x,            y,            mu);
+            const [k2x, k2y] = vdpRHS(x + h/2*k1x, y + h/2*k1y, mu);
+            const [k3x, k3y] = vdpRHS(x + h/2*k2x, y + h/2*k2y, mu);
+            const [k4x, k4y] = vdpRHS(x + h*k3x,   y + h*k3y,   mu);
+            return [
+                x + (h/6) * (k1x + 2*k2x + 2*k3x + k4x),
+                y + (h/6) * (k1y + 2*k2y + 2*k3y + k4y)
+            ];
+        }
+
+        // Compute full trajectory from (X0, Y0) for T_MAX seconds
+        function computeTrajectory(mu) {
+            let x = X0, y = Y0;
+            const pts = [[x, y, 0]]; // [x, y, t]
+            for (let i = 1; i <= N_STEPS; i++) {
+                [x, y] = rk4Step(x, y, mu, H);
+                pts.push([x, y, i * H]);
+            }
+            return pts;
+        }
+
+        // Compute limit cycle (reference) for the phase portrait background
+        function computeLimitCycle(mu) {
+            let x = 2.0, y = 0.0;
+            const pts = [];
+            for (let i = 0; i < LC_N; i++) {
+                [x, y] = rk4Step(x, y, mu, H);
+                if (i >= LC_N_SKIP) pts.push([x, y]);
+            }
+            return pts;
+        }
+
+        // ── Color scale (same plasma as page 1) ──────────────────────────────────
+        const muColor = d3.scaleSequential()
+            .domain([0.10, 5.00])
+            .interpolator(d3.interpolatePlasma);
+
+        // ── D3 chart setup ────────────────────────────────────────────────────────
+        const MARGIN = { top: 22, right: 22, bottom: 48, left: 58 };
+        const VB_W   = 560;
+        const VB_H   = 400;
+        const PLOT_W = VB_W - MARGIN.left - MARGIN.right;
+        const PLOT_H = VB_H - MARGIN.top  - MARGIN.bottom;
+
+        function buildChart(containerId) {
+            const svg = d3.select(`#${containerId}`)
+                .append('svg')
+                .attr('viewBox', `0 0 ${VB_W} ${VB_H}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+            return svg.append('g')
+                .attr('transform', `translate(${MARGIN.left},${MARGIN.top})`);
+        }
+
+        function addGrid(g, xScale, yScale, xT, yT) {
+            g.append('g').attr('class', 'grid')
+                .attr('transform', `translate(0,${PLOT_H})`)
+                .call(d3.axisBottom(xScale).ticks(xT).tickSize(-PLOT_H).tickFormat(''));
+            g.append('g').attr('class', 'grid')
+                .call(d3.axisLeft(yScale).ticks(yT).tickSize(-PLOT_W).tickFormat(''));
+        }
+
+        function addAxes(g, xScale, yScale, xT, yT, xLabel, yLabel) {
+            g.append('g').attr('class', 'axis')
+                .attr('transform', `translate(0,${PLOT_H})`)
+                .call(d3.axisBottom(xScale).ticks(xT));
+            g.append('g').attr('class', 'axis')
+                .call(d3.axisLeft(yScale).ticks(yT));
+            g.append('text').attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('x', PLOT_W / 2).attr('y', PLOT_H + 40)
+                .text(xLabel);
+            g.append('text').attr('class', 'axis-label')
+                .attr('text-anchor', 'middle')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', -PLOT_H / 2).attr('y', -46)
+                .text(yLabel);
+        }
+
+        function addCrosshair(g, xScale, yScale) {
+            g.append('line').attr('class', 'crosshair')
+                .attr('x1', xScale(0)).attr('x2', xScale(0))
+                .attr('y1', 0).attr('y2', PLOT_H);
+            g.append('line').attr('class', 'crosshair')
+                .attr('x1', 0).attr('x2', PLOT_W)
+                .attr('y1', yScale(0)).attr('y2', yScale(0));
+        }
+
+        // ── Phase portrait ────────────────────────────────────────────────────────
+        const phaseXScale = d3.scaleLinear().domain([-3.5, 3.5]).range([0, PLOT_W]);
+        const phaseYScale = d3.scaleLinear().domain([-7,   7  ]).range([PLOT_H, 0]);
+        const phaseLine   = d3.line().x(d => phaseXScale(d[0])).y(d => phaseYScale(d[1]));
+        const phaseG = buildChart('phase-container');
+        addGrid(phaseG, phaseXScale, phaseYScale, 6, 6);
+        addAxes(phaseG, phaseXScale, phaseYScale, 6, 6, 'y', "y'");
+        addCrosshair(phaseG, phaseXScale, phaseYScale);
+
+        // Faint limit cycle in background
+        const lcPath = phaseG.append('path')
+            .attr('fill', 'none')
+            .attr('stroke', '#444')
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '4,3');
+
+        // Growing trajectory
+        const trajPath = phaseG.append('path')
+            .attr('fill', 'none')
+            .attr('stroke-width', 1.8)
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round');
+
+        // Initial condition dot (hollow circle)
+        const ic = phaseG.append('circle').attr('r', 5)
+            .attr('fill', 'none').attr('stroke-width', 1.5);
+
+        // Current position dot
+        const dot = phaseG.append('circle').attr('r', 6)
+            .attr('stroke', '#fff').attr('stroke-width', 1.5);
+
+        // ── Time series ───────────────────────────────────────────────────────────
+        const timeXScale = d3.scaleLinear().domain([0, T_MAX]).range([0, PLOT_W]);
+        const timeYScale = d3.scaleLinear().domain([-3.5, 3.5]).range([PLOT_H, 0]);
+        const timeLine   = d3.line().x(d => timeXScale(d[2])).y(d => timeYScale(d[0]));
+        const timeG = buildChart('time-container');
+        addGrid(timeG, timeXScale, timeYScale, 6, 6);
+        addAxes(timeG, timeXScale, timeYScale, 6, 6, 't  (time)', 'x  (position)');
+        addCrosshair(timeG, timeXScale, timeYScale);
+
+        // Growing x(t) line
+        const timeSeriesPath = timeG.append('path')
+            .attr('fill', 'none')
+            .attr('stroke-width', 1.8)
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round');
+
+        // Vertical cursor at current t
+        const timeCursor = timeG.append('line')
+            .attr('y1', 0).attr('y2', PLOT_H)
+            .attr('stroke', '#555').attr('stroke-width', 1)
+            .attr('stroke-dasharray', '3,3');
+
+        // ── State ─────────────────────────────────────────────────────────────────
+        let trajectory   = null;
+        let limitCycle   = null;
+        let currentStep  = 0;
+        let playing      = false;
+        let playRaf      = null;
+
+        const muDisplay  = document.getElementById('mu-display');
+        const muSwatch   = document.getElementById('mu-swatch');
+        const tDisplay   = document.getElementById('t-display');
+        const muSlider   = document.getElementById('mu-slider');
+        const timeSlider = document.getElementById('time-slider');
+        const playBtn    = document.getElementById('play-btn');
+        const resetBtn   = document.getElementById('reset-btn');
+
+        function getMu()  { return +muSlider.value; }
+
+        // ── Render ────────────────────────────────────────────────────────────────
+        function render(step) {
+            const pts  = trajectory.slice(0, step + 1);
+            const last = trajectory[step];
+            const color = muColor(getMu());
+
+            // Phase portrait
+            trajPath.attr('stroke', color).attr('d', phaseLine(pts));
+            dot.attr('cx', phaseXScale(last[0])).attr('cy', phaseYScale(last[1]))
+               .attr('fill', color);
+            ic.attr('cx', phaseXScale(trajectory[0][0]))
+              .attr('cy', phaseYScale(trajectory[0][1]))
+              .attr('stroke', color);
+
+            // Time series
+            timeSeriesPath.attr('stroke', color).attr('d', timeLine(pts));
+            timeCursor.attr('x1', timeXScale(last[2])).attr('x2', timeXScale(last[2]));
+
+            // Controls
+            tDisplay.textContent = last[2].toFixed(2);
+            timeSlider.value = step;
+        }
+
+        function resetFor(mu) {
+            stopPlay();
+            const color = muColor(mu);
+            muDisplay.textContent = mu.toFixed(2);
+            muSwatch.style.backgroundColor = color;
+
+            trajectory  = computeTrajectory(mu);
+            limitCycle  = computeLimitCycle(mu);
+            currentStep = 0;
+            timeSlider.max = N_STEPS;
+
+            lcPath.attr('d', phaseLine(limitCycle));
+            render(0);
+        }
+
+        // ── Play / Pause / Reset ──────────────────────────────────────────────────
+        function stopPlay() {
+            playing = false;
+            if (playRaf) { cancelAnimationFrame(playRaf); playRaf = null; }
+            playBtn.textContent = '▶ Play';
+        }
+
+        playBtn.addEventListener('click', () => {
+            if (playing) { stopPlay(); return; }
+            if (currentStep >= N_STEPS) currentStep = 0;
+            playing = true;
+            playBtn.textContent = '⏸ Pause';
+            const tick = () => {
+                currentStep = Math.min(currentStep + SPEED, N_STEPS);
+                render(currentStep);
+                if (currentStep >= N_STEPS) { stopPlay(); return; }
+                playRaf = requestAnimationFrame(tick);
+            };
+            tick();
+        });
+
+        resetBtn.addEventListener('click', () => resetFor(getMu()));
+
+        // ── Sliders ───────────────────────────────────────────────────────────────
+        muSlider.addEventListener('input', () => resetFor(getMu()));
+
+        timeSlider.addEventListener('input', function () {
+            stopPlay();
+            currentStep = +this.value;
+            render(currentStep);
+        });
+
+        // ── Init ──────────────────────────────────────────────────────────────────
+        resetFor(getMu());
+    </script>
+</body>
+</html>
