@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Van der Pol — Amplitude &amp; Period</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { margin:0; padding:20px; font-family:sans-serif; background:#1a1a1a; display:flex; flex-direction:column; align-items:center; color:#fff; }
+        nav { width:100%; max-width:1200px; margin-bottom:14px; font-size:13px; }
+        nav a { color:#2b83ba; text-decoration:none; }
+        nav a:hover { text-decoration:underline; }
+        h1 { margin-top:0; margin-bottom:4px; font-size:1.4rem; letter-spacing:0.03em; }
+        .subtitle { font-size:0.82rem; color:#888; margin-bottom:18px; text-align:center; }
+        #controls { margin-bottom:18px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; justify-content:center; }
+        label { font-size:14px; }
+        #mu-slider { width:260px; cursor:pointer; }
+        #mu-display { font-weight:bold; min-width:36px; display:inline-block; }
+        #mu-swatch  { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:middle; margin-left:4px; border:1px solid #555; }
+        #charts { display:flex; gap:20px; flex-wrap:wrap; justify-content:center; width:100%; max-width:1200px; }
+        .chart-panel { flex:1 1 440px; max-width:560px; }
+        .chart-panel h2 { text-align:center; font-size:0.9rem; color:#bbb; margin:0 0 6px 0; font-weight:normal; }
+        .chart-panel svg { border:1px solid #444; background:#111; width:100%; height:auto; display:block; }
+        .axis path, .axis line { stroke:#555; }
+        .axis text { fill:#999; font-size:11px; }
+        .grid line  { stroke:#2a2a2a; stroke-dasharray:2,2; }
+        .grid path  { stroke:none; }
+        .axis-label { fill:#888; font-size:12px; }
+        #loading { font-size:13px; color:#888; margin-bottom:12px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html">Effect of μ</a> &nbsp;|&nbsp;
+        <a href="page2.html">Time Evolution</a> &nbsp;|&nbsp;
+        <a href="page3.html">Basin of Attraction</a> &nbsp;|&nbsp;
+        <a href="page4.html">Vector Field</a> &nbsp;|&nbsp;
+        Amplitude &amp; Period
+    </nav>
+    <h1>Van der Pol — Amplitude &amp; Period vs. μ</h1>
+    <p class="subtitle">
+        x″ − μ(1 − x²)x′ + x = 0 &nbsp;|&nbsp;
+        Limit-cycle properties computed via RK4 integration for each μ
+    </p>
+    <div id="loading">Computing…</div>
+    <div id="controls" style="display:none">
+        <label>μ = <span id="mu-display">1.00</span><span id="mu-swatch"></span></label>
+        <input type="range" id="mu-slider" min="0.10" max="5.00" step="0.05" value="1.00">
+    </div>
+    <div id="charts">
+        <div class="chart-panel">
+            <h2>Limit-Cycle Amplitude &nbsp;(max |x|)</h2>
+            <div id="amp-container"></div>
+        </div>
+        <div class="chart-panel">
+            <h2>Oscillation Period &nbsp;T</h2>
+            <div id="per-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // ── RK4 ──────────────────────────────────────────────────────────────────
+        const H          = 0.02;
+        const T_TOTAL    = 60;
+        const T_TRANS    = 30;
+        const N_TOTAL    = Math.round(T_TOTAL / H);
+        const N_TRANS    = Math.round(T_TRANS  / H);
+        const MU_MIN     = 0.10;
+        const MU_MAX     = 5.00;
+        const MU_STEP    = 0.05;
+
+        function vdpRHS(x, y, mu) { return [y, mu*(1-x*x)*y - x]; }
+        function rk4Step(x, y, mu, h) {
+            const [k1x,k1y] = vdpRHS(x,            y,            mu);
+            const [k2x,k2y] = vdpRHS(x+h/2*k1x,   y+h/2*k1y,   mu);
+            const [k3x,k3y] = vdpRHS(x+h/2*k2x,   y+h/2*k2y,   mu);
+            const [k4x,k4y] = vdpRHS(x+h*k3x,      y+h*k3y,     mu);
+            return [x+(h/6)*(k1x+2*k2x+2*k3x+k4x), y+(h/6)*(k1y+2*k2y+2*k3y+k4y)];
+        }
+
+        function solveStats(mu) {
+            let px = 2, py = 0;
+            const timePoints = [];
+            for (let i = 0; i < N_TOTAL; i++) {
+                [px, py] = rk4Step(px, py, mu, H);
+                if (i >= N_TRANS) timePoints.push([( i - N_TRANS) * H, px]);
+            }
+            // Amplitude
+            const amplitude = d3.max(timePoints, d => Math.abs(d[1]));
+            // Period via negative→positive zero crossings
+            const crossings = [];
+            for (let i = 1; i < timePoints.length; i++) {
+                const [t0, x0] = timePoints[i-1];
+                const [t1, x1] = timePoints[i];
+                if (x0 < 0 && x1 >= 0) {
+                    crossings.push(t0 + (-x0)*(t1-t0)/(x1-x0));
+                }
+            }
+            const period = crossings.length >= 2
+                ? (crossings[crossings.length-1] - crossings[0]) / (crossings.length - 1)
+                : null;
+            return { mu, amplitude, period };
+        }
+
+        // ── Precompute all μ values (deferred so browser can render first) ────────
+        function computeAllAsync(callback) {
+            const muVals = [];
+            for (let mu = MU_MIN; mu <= MU_MAX + 0.001; mu += MU_STEP) {
+                muVals.push(+(Math.round(mu / MU_STEP) * MU_STEP).toFixed(2));
+            }
+            const results = [];
+            let i = 0;
+            const CHUNK = 5;
+            const el = document.getElementById('loading');
+            function step() {
+                const end = Math.min(i + CHUNK, muVals.length);
+                for (; i < end; i++) results.push(solveStats(muVals[i]));
+                el.textContent = i < muVals.length
+                    ? `Computing… (${i}/${muVals.length})`
+                    : '';
+                if (i < muVals.length) setTimeout(step, 0);
+                else callback(results);
+            }
+            setTimeout(step, 0);
+        }
+
+        const muColor = d3.scaleSequential().domain([MU_MIN, MU_MAX]).interpolator(d3.interpolatePlasma);
+
+        // ── Chart helpers ─────────────────────────────────────────────────────────
+        const M  = { top:22, right:22, bottom:48, left:58 };
+        const VW = 540, VH = 380;
+        const PW = VW - M.left - M.right;
+        const PH = VH - M.top  - M.bottom;
+
+        function buildChart(containerId) {
+            const svg = d3.select(`#${containerId}`).append('svg')
+                .attr('viewBox', `0 0 ${VW} ${VH}`)
+                .attr('preserveAspectRatio', 'xMidYMid meet');
+            return svg.append('g').attr('transform', `translate(${M.left},${M.top})`);
+        }
+
+        function addGrid(g, xSc, ySc, xT, yT) {
+            g.append('g').attr('class','grid').attr('transform',`translate(0,${PH})`)
+                .call(d3.axisBottom(xSc).ticks(xT).tickSize(-PH).tickFormat(''));
+            g.append('g').attr('class','grid')
+                .call(d3.axisLeft(ySc).ticks(yT).tickSize(-PW).tickFormat(''));
+        }
+        function addAxes(g, xSc, ySc, xT, yT, xLbl, yLbl) {
+            g.append('g').attr('class','axis').attr('transform',`translate(0,${PH})`)
+                .call(d3.axisBottom(xSc).ticks(xT));
+            g.append('g').attr('class','axis')
+                .call(d3.axisLeft(ySc).ticks(yT));
+            g.append('text').attr('class','axis-label').attr('text-anchor','middle')
+                .attr('x',PW/2).attr('y',PH+40).text(xLbl);
+            g.append('text').attr('class','axis-label').attr('text-anchor','middle')
+                .attr('transform','rotate(-90)').attr('x',-PH/2).attr('y',-46).text(yLbl);
+        }
+
+        // ── Build charts after data ready ─────────────────────────────────────────
+        computeAllAsync(data => {
+            document.getElementById('loading').textContent = '';
+            document.getElementById('controls').style.display = 'flex';
+
+            const muSc = d3.scaleLinear().domain([MU_MIN, MU_MAX]).range([0, PW]);
+
+            // Amplitude ranges
+            const ampMin = d3.min(data, d => d.amplitude);
+            const ampMax = d3.max(data, d => d.amplitude);
+            const ampPad = (ampMax - ampMin) * 0.15 || 0.1;
+            const ampSc  = d3.scaleLinear().domain([ampMin - ampPad, ampMax + ampPad]).range([PH, 0]).nice();
+
+            // Period ranges
+            const perData = data.filter(d => d.period != null);
+            const perMax  = d3.max(perData, d => d.period);
+            const perSc   = d3.scaleLinear().domain([0, perMax * 1.08]).range([PH, 0]).nice();
+
+            // ── Amplitude chart ───────────────────────────────────────────────────
+            const ampG = buildChart('amp-container');
+            addGrid(ampG, muSc, ampSc, 5, 5);
+            addAxes(ampG, muSc, ampSc, 5, 5, 'μ', 'max |x|');
+
+            // Colored line segments
+            for (let i = 1; i < data.length; i++) {
+                const d0 = data[i-1], d1 = data[i];
+                if (d0.amplitude == null || d1.amplitude == null) continue;
+                ampG.append('line')
+                    .attr('x1', muSc(d0.mu)).attr('y1', ampSc(d0.amplitude))
+                    .attr('x2', muSc(d1.mu)).attr('y2', ampSc(d1.amplitude))
+                    .attr('stroke', muColor((d0.mu+d1.mu)/2))
+                    .attr('stroke-width', 2.5).attr('stroke-linecap','round');
+            }
+
+            // Cursor elements
+            const ampCursor = ampG.append('line')
+                .attr('y1',0).attr('y2',PH)
+                .attr('stroke','#aaa').attr('stroke-width',1).attr('stroke-dasharray','4,3');
+            const ampDot = ampG.append('circle').attr('r',6)
+                .attr('fill','#fff').attr('stroke','#888').attr('stroke-width',1.5);
+            const ampReadout = ampG.append('text')
+                .attr('y', -8).attr('text-anchor','middle')
+                .attr('fill','#ccc').attr('font-size','11px');
+
+            // ── Period chart ──────────────────────────────────────────────────────
+            const perG = buildChart('per-container');
+            addGrid(perG, muSc, perSc, 5, 5);
+            addAxes(perG, muSc, perSc, 5, 5, 'μ', 'T  (time units)');
+
+            for (let i = 1; i < perData.length; i++) {
+                const d0 = perData[i-1], d1 = perData[i];
+                perG.append('line')
+                    .attr('x1', muSc(d0.mu)).attr('y1', perSc(d0.period))
+                    .attr('x2', muSc(d1.mu)).attr('y2', perSc(d1.period))
+                    .attr('stroke', muColor((d0.mu+d1.mu)/2))
+                    .attr('stroke-width', 2.5).attr('stroke-linecap','round');
+            }
+
+            // Reference line 2π (harmonic period)
+            const twoPI = 2 * Math.PI;
+            perG.append('line')
+                .attr('x1',0).attr('x2',PW)
+                .attr('y1',perSc(twoPI)).attr('y2',perSc(twoPI))
+                .attr('stroke','#555').attr('stroke-width',1).attr('stroke-dasharray','3,3');
+            perG.append('text')
+                .attr('x',PW-4).attr('y',perSc(twoPI)-5)
+                .attr('text-anchor','end').attr('fill','#666').attr('font-size','10px')
+                .text('2π ≈ 6.28');
+
+            const perCursor = perG.append('line')
+                .attr('y1',0).attr('y2',PH)
+                .attr('stroke','#aaa').attr('stroke-width',1).attr('stroke-dasharray','4,3');
+            const perDot = perG.append('circle').attr('r',6)
+                .attr('fill','#fff').attr('stroke','#888').attr('stroke-width',1.5);
+            const perReadout = perG.append('text')
+                .attr('y', -8).attr('text-anchor','middle')
+                .attr('fill','#ccc').attr('font-size','11px');
+
+            // ── Cursor update ─────────────────────────────────────────────────────
+            function updateCursor(mu) {
+                const qmu = +(Math.round(mu / MU_STEP) * MU_STEP).toFixed(2);
+                const d = data.find(d => Math.abs(d.mu - qmu) < 0.001);
+                if (!d) return;
+
+                document.getElementById('mu-display').textContent = qmu.toFixed(2);
+                document.getElementById('mu-swatch').style.backgroundColor = muColor(qmu);
+
+                const ax = muSc(d.mu);
+                ampCursor.attr('x1', ax).attr('x2', ax);
+                ampDot.attr('cx', ax).attr('cy', ampSc(d.amplitude));
+                ampReadout.attr('x', Math.min(ax, PW-60)).text(`A = ${d.amplitude.toFixed(4)}`);
+
+                if (d.period != null) {
+                    const px = muSc(d.mu);
+                    perCursor.attr('x1', px).attr('x2', px);
+                    perDot.attr('cx', px).attr('cy', perSc(d.period));
+                    perReadout.attr('x', Math.min(px, PW-60)).text(`T = ${d.period.toFixed(3)}`);
+                }
+            }
+
+            const muSlider = document.getElementById('mu-slider');
+            muSlider.addEventListener('input', () => updateCursor(+muSlider.value));
+            updateCursor(1.0);
+        });
+    </script>
+</body>
+</html>

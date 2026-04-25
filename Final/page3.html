@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Van der Pol — Basin of Attraction</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { margin:0; padding:20px; font-family:sans-serif; background:#1a1a1a; display:flex; flex-direction:column; align-items:center; color:#fff; }
+        nav { width:100%; max-width:960px; margin-bottom:14px; font-size:13px; }
+        nav a { color:#2b83ba; text-decoration:none; }
+        nav a:hover { text-decoration:underline; }
+        h1 { margin-top:0; margin-bottom:4px; font-size:1.4rem; letter-spacing:0.03em; }
+        .subtitle { font-size:0.82rem; color:#888; margin-bottom:18px; text-align:center; }
+        #controls { margin-bottom:18px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; justify-content:center; }
+        label { font-size:14px; }
+        input[type=range] { cursor:pointer; }
+        #mu-slider  { width:180px; }
+        #time-slider { width:260px; }
+        #mu-display { font-weight:bold; min-width:36px; display:inline-block; }
+        #mu-swatch  { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:middle; margin-left:4px; border:1px solid #555; }
+        #t-display  { font-weight:bold; min-width:42px; display:inline-block; }
+        .btn { background:#2b83ba; color:#fff; border:none; padding:6px 14px; border-radius:4px; cursor:pointer; font-size:14px; }
+        .btn:hover { background:#3e9ed6; }
+        #reset-btn  { background:#555; }
+        #reset-btn:hover { background:#777; }
+        #chart-wrap { width:100%; max-width:960px; }
+        #chart-wrap svg { border:1px solid #444; background:#111; width:100%; height:auto; display:block; }
+        .axis path, .axis line { stroke:#555; }
+        .axis text { fill:#999; font-size:11px; }
+        .grid line  { stroke:#2a2a2a; stroke-dasharray:2,2; }
+        .grid path  { stroke:none; }
+        .crosshair  { stroke:#2e2e2e; stroke-dasharray:4,3; }
+        .axis-label { fill:#888; font-size:12px; }
+        #legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; justify-content:center; }
+        .leg { display:flex; align-items:center; gap:6px; font-size:12px; color:#bbb; }
+        .leg-line { width:22px; height:3px; border-radius:1px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html">Effect of μ</a> &nbsp;|&nbsp;
+        <a href="page2.html">Time Evolution</a> &nbsp;|&nbsp;
+        Basin of Attraction &nbsp;|&nbsp;
+        <a href="page4.html">Vector Field</a> &nbsp;|&nbsp;
+        <a href="page5.html">Amplitude &amp; Period</a>
+    </nav>
+    <h1>Van der Pol — Basin of Attraction</h1>
+    <p class="subtitle">
+        x″ − μ(1 − x²)x′ + x = 0 &nbsp;|&nbsp;
+        All trajectories spiral toward the same limit cycle, regardless of starting point
+    </p>
+    <div id="controls">
+        <label>μ = <span id="mu-display">1.00</span><span id="mu-swatch"></span></label>
+        <input type="range" id="mu-slider" min="0.10" max="5.00" step="0.05" value="1.00">
+        <label>t = <span id="t-display">0.00</span></label>
+        <input type="range" id="time-slider" min="0" max="1500" step="1" value="0">
+        <button id="play-btn" class="btn">&#9654; Play</button>
+        <button id="reset-btn" class="btn">&#8635; Reset</button>
+    </div>
+    <div id="chart-wrap"><div id="phase-container"></div></div>
+    <div id="legend"></div>
+
+    <script>
+        const H = 0.02;
+        const T_MAX   = 30;
+        const N_STEPS = Math.round(T_MAX / H);  // 1500
+        const SPEED   = 4;
+        const LC_N    = Math.round(60 / H);
+        const LC_SKIP = Math.round(30 / H);
+
+        // 4 inside + 4 outside the limit cycle
+        const ICS = [
+            [ 0.5,  0  ], [-0.5,  0  ], [ 0.3,  0.9], [-0.3, -0.9],
+            [ 3.0,  0  ], [-3.0,  0  ], [ 0.5,  9.0], [-0.5, -9.0]
+        ];
+        const IC_LABELS = [
+            '(0.5, 0)', '(−0.5, 0)', '(0.3, 0.9)', '(−0.3, −0.9)',
+            '(3, 0)',   '(−3, 0)',   '(0.5, 9)',    '(−0.5, −9)'
+        ];
+
+        const muColor = d3.scaleSequential().domain([0.1, 5.0]).interpolator(d3.interpolatePlasma);
+        // 8 evenly-spaced plasma colors — same scale as page 1
+        const COLORS = ICS.map((_, i) => muColor(0.1 + i * (4.9 / (ICS.length - 1))));
+
+        function vdpRHS(x, y, mu) { return [y, mu*(1-x*x)*y - x]; }
+        function rk4Step(x, y, mu, h) {
+            const [k1x,k1y] = vdpRHS(x,             y,             mu);
+            const [k2x,k2y] = vdpRHS(x+h/2*k1x,    y+h/2*k1y,    mu);
+            const [k3x,k3y] = vdpRHS(x+h/2*k2x,    y+h/2*k2y,    mu);
+            const [k4x,k4y] = vdpRHS(x+h*k3x,      y+h*k3y,      mu);
+            return [x+(h/6)*(k1x+2*k2x+2*k3x+k4x), y+(h/6)*(k1y+2*k2y+2*k3y+k4y)];
+        }
+
+        function computeTraj(x0, y0, mu) {
+            let x = x0, y = y0;
+            const pts = [[x, y, 0]];
+            for (let i = 1; i <= N_STEPS; i++) {
+                [x, y] = rk4Step(x, y, mu, H);
+                pts.push([x, y, i*H]);
+            }
+            return pts;
+        }
+        function computeLC(mu) {
+            let x = 2, y = 0;
+            const pts = [];
+            for (let i = 0; i < LC_N; i++) {
+                [x, y] = rk4Step(x, y, mu, H);
+                if (i >= LC_SKIP) pts.push([x, y]);
+            }
+            return pts;
+        }
+
+        const M  = { top:22, right:22, bottom:48, left:62 };
+        const VW = 700, VH = 540;
+        const PW = VW - M.left - M.right;
+        const PH = VH - M.top  - M.bottom;
+
+        const xSc = d3.scaleLinear().domain([-3.5, 3.5]).range([0, PW]);
+        const ySc = d3.scaleLinear().domain([-12, 12]).range([PH, 0]);
+        const ln  = d3.line().x(d => xSc(d[0])).y(d => ySc(d[1]));
+
+        const svg = d3.select('#phase-container').append('svg')
+            .attr('viewBox', `0 0 ${VW} ${VH}`)
+            .attr('preserveAspectRatio', 'xMidYMid meet');
+
+        svg.append('defs').append('clipPath').attr('id', 'clip')
+            .append('rect').attr('width', PW).attr('height', PH);
+
+        const g = svg.append('g').attr('transform', `translate(${M.left},${M.top})`);
+
+        // Grid
+        g.append('g').attr('class','grid').attr('transform',`translate(0,${PH})`)
+            .call(d3.axisBottom(xSc).ticks(7).tickSize(-PH).tickFormat(''));
+        g.append('g').attr('class','grid')
+            .call(d3.axisLeft(ySc).ticks(8).tickSize(-PW).tickFormat(''));
+        // Axes
+        g.append('g').attr('class','axis').attr('transform',`translate(0,${PH})`)
+            .call(d3.axisBottom(xSc).ticks(7));
+        g.append('g').attr('class','axis')
+            .call(d3.axisLeft(ySc).ticks(8));
+        g.append('text').attr('class','axis-label').attr('text-anchor','middle')
+            .attr('x', PW/2).attr('y', PH+40).text('y  (position)');
+        g.append('text').attr('class','axis-label').attr('text-anchor','middle')
+            .attr('transform','rotate(-90)').attr('x', -PH/2).attr('y', -50)
+            .text("y'  (velocity)");
+        // Crosshairs
+        g.append('line').attr('class','crosshair')
+            .attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',PH);
+        g.append('line').attr('class','crosshair')
+            .attr('x1',0).attr('x2',PW).attr('y1',ySc(0)).attr('y2',ySc(0));
+
+        const clipG = g.append('g').attr('clip-path', 'url(#clip)');
+
+        // Limit cycle reference
+        const lcPath = clipG.append('path').attr('fill','none')
+            .attr('stroke','#555').attr('stroke-width',2).attr('stroke-dasharray','5,3');
+
+        // Per-trajectory elements
+        const trajPaths = [], icMarkers = [], curDots = [];
+        ICS.forEach(([x0, y0], i) => {
+            trajPaths.push(
+                clipG.append('path').attr('fill','none').attr('stroke', COLORS[i])
+                    .attr('stroke-width',1.8).attr('stroke-linecap','round')
+                    .attr('stroke-linejoin','round').attr('opacity',0.9)
+            );
+            icMarkers.push(
+                g.append('circle').attr('r',4).attr('fill','none')
+                    .attr('stroke', COLORS[i]).attr('stroke-width',1.5)
+                    .attr('stroke-dasharray','2,1.5')
+                    .attr('cx', xSc(x0)).attr('cy', ySc(y0))
+            );
+            curDots.push(
+                clipG.append('circle').attr('r',5).attr('fill', COLORS[i])
+                    .attr('stroke','#fff').attr('stroke-width',1)
+            );
+        });
+
+        // Legend
+        const legDiv = document.getElementById('legend');
+        ICS.forEach(([x0, y0], i) => {
+            const el = document.createElement('div');
+            el.className = 'leg';
+            el.innerHTML = `<div class="leg-line" style="background:${COLORS[i]}"></div>${IC_LABELS[i]}`;
+            legDiv.appendChild(el);
+        });
+
+        // State
+        let trajs = null, step = 0, playing = false, raf = null;
+        const muDisp   = document.getElementById('mu-display');
+        const muSwatch = document.getElementById('mu-swatch');
+        const tDisp    = document.getElementById('t-display');
+        const muSlider = document.getElementById('mu-slider');
+        const tSlider  = document.getElementById('time-slider');
+        const playBtn  = document.getElementById('play-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+        function render(s) {
+            ICS.forEach((_, i) => {
+                trajPaths[i].attr('d', ln(trajs[i].slice(0, s+1)));
+                const last = trajs[i][s];
+                curDots[i].attr('cx', xSc(last[0])).attr('cy', ySc(last[1]));
+            });
+            tDisp.textContent = (s * H).toFixed(2);
+            tSlider.value = s;
+        }
+
+        function stopPlay() {
+            playing = false;
+            if (raf) { cancelAnimationFrame(raf); raf = null; }
+            playBtn.textContent = '▶ Play';
+        }
+
+        function resetFor(mu) {
+            stopPlay();
+            muDisp.textContent = mu.toFixed(2);
+            muSwatch.style.backgroundColor = muColor(mu);
+            trajs = ICS.map(([x0, y0]) => computeTraj(x0, y0, mu));
+            lcPath.attr('d', ln(computeLC(mu)));
+            step = 0;
+            tSlider.max = N_STEPS;
+            render(0);
+        }
+
+        playBtn.addEventListener('click', () => {
+            if (playing) { stopPlay(); return; }
+            if (step >= N_STEPS) step = 0;
+            playing = true;
+            playBtn.textContent = '⏸ Pause';
+            const tick = () => {
+                step = Math.min(step + SPEED, N_STEPS);
+                render(step);
+                if (step >= N_STEPS) { stopPlay(); return; }
+                raf = requestAnimationFrame(tick);
+            };
+            tick();
+        });
+        resetBtn.addEventListener('click', () => resetFor(+muSlider.value));
+        muSlider.addEventListener('input', () => resetFor(+muSlider.value));
+        tSlider.addEventListener('input', function() {
+            stopPlay();
+            step = +this.value;
+            render(step);
+        });
+
+        resetFor(1.0);
+    </script>
+</body>
+</html>

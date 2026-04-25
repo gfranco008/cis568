@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Van der Pol — Vector Field</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { margin:0; padding:20px; font-family:sans-serif; background:#1a1a1a; display:flex; flex-direction:column; align-items:center; color:#fff; }
+        nav { width:100%; max-width:960px; margin-bottom:14px; font-size:13px; }
+        nav a { color:#2b83ba; text-decoration:none; }
+        nav a:hover { text-decoration:underline; }
+        h1 { margin-top:0; margin-bottom:4px; font-size:1.4rem; letter-spacing:0.03em; }
+        .subtitle { font-size:0.82rem; color:#888; margin-bottom:18px; text-align:center; }
+        #controls { margin-bottom:18px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; justify-content:center; }
+        label { font-size:14px; }
+        #mu-slider { width:220px; cursor:pointer; }
+        #mu-display { font-weight:bold; min-width:36px; display:inline-block; }
+        #mu-swatch  { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:middle; margin-left:4px; border:1px solid #555; }
+        #chart-wrap { width:100%; max-width:960px; }
+        #chart-wrap svg { border:1px solid #444; background:#111; width:100%; height:auto; display:block; }
+        .axis path, .axis line { stroke:#555; }
+        .axis text { fill:#999; font-size:11px; }
+        .grid line  { stroke:#2a2a2a; stroke-dasharray:2,2; }
+        .grid path  { stroke:none; }
+        .crosshair  { stroke:#2e2e2e; stroke-dasharray:4,3; }
+        .axis-label { fill:#888; font-size:12px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="index.html">Effect of μ</a> &nbsp;|&nbsp;
+        <a href="page2.html">Time Evolution</a> &nbsp;|&nbsp;
+        <a href="page3.html">Basin of Attraction</a> &nbsp;|&nbsp;
+        Vector Field &nbsp;|&nbsp;
+        <a href="page5.html">Amplitude &amp; Period</a>
+    </nav>
+    <h1>Van der Pol — Phase Plane: Vector Field &amp; Nullclines</h1>
+    <p class="subtitle">
+        x″ − μ(1 − x²)x′ + x = 0 &nbsp;|&nbsp;
+        Arrows show flow direction · Nullclines mark where dx/dt = 0 or dx′/dt = 0
+    </p>
+    <div id="controls">
+        <label>μ = <span id="mu-display">1.00</span><span id="mu-swatch"></span></label>
+        <input type="range" id="mu-slider" min="0.10" max="5.00" step="0.05" value="1.00">
+    </div>
+    <div id="chart-wrap"><div id="phase-container"></div></div>
+
+    <script>
+        const LC_N    = Math.round(60 / 0.02);
+        const LC_SKIP = Math.round(30 / 0.02);
+        const H_LC    = 0.02;
+
+        function vdpRHS(x, y, mu) { return [y, mu*(1-x*x)*y - x]; }
+        function rk4Step(x, y, mu, h) {
+            const [k1x,k1y] = vdpRHS(x,            y,            mu);
+            const [k2x,k2y] = vdpRHS(x+h/2*k1x,   y+h/2*k1y,   mu);
+            const [k3x,k3y] = vdpRHS(x+h/2*k2x,   y+h/2*k2y,   mu);
+            const [k4x,k4y] = vdpRHS(x+h*k3x,      y+h*k3y,     mu);
+            return [x+(h/6)*(k1x+2*k2x+2*k3x+k4x), y+(h/6)*(k1y+2*k2y+2*k3y+k4y)];
+        }
+        function computeLC(mu) {
+            let x = 2, y = 0;
+            const pts = [];
+            for (let i = 0; i < LC_N; i++) {
+                [x, y] = rk4Step(x, y, mu, H_LC);
+                if (i >= LC_SKIP) pts.push([x, y]);
+            }
+            return pts;
+        }
+
+        const muColor = d3.scaleSequential().domain([0.1, 5.0]).interpolator(d3.interpolatePlasma);
+
+        const M  = { top:22, right:22, bottom:48, left:62 };
+        const VW = 700, VH = 540;
+        const PW = VW - M.left - M.right;
+        const PH = VH - M.top  - M.bottom;
+
+        const X_DOM = [-3.5, 3.5];
+        const Y_DOM = [-12, 12];
+
+        const xSc = d3.scaleLinear().domain(X_DOM).range([0, PW]);
+        const ySc = d3.scaleLinear().domain(Y_DOM).range([PH, 0]);
+        const phLine = d3.line().x(d => xSc(d[0])).y(d => ySc(d[1]));
+
+        const svg = d3.select('#phase-container').append('svg')
+            .attr('viewBox', `0 0 ${VW} ${VH}`)
+            .attr('preserveAspectRatio', 'xMidYMid meet');
+
+        svg.append('defs').append('clipPath').attr('id', 'clip')
+            .append('rect').attr('width', PW).attr('height', PH);
+
+        const g = svg.append('g').attr('transform', `translate(${M.left},${M.top})`);
+
+        // Grid
+        g.append('g').attr('class','grid').attr('transform',`translate(0,${PH})`)
+            .call(d3.axisBottom(xSc).ticks(7).tickSize(-PH).tickFormat(''));
+        g.append('g').attr('class','grid')
+            .call(d3.axisLeft(ySc).ticks(8).tickSize(-PW).tickFormat(''));
+        // Axes
+        g.append('g').attr('class','axis').attr('transform',`translate(0,${PH})`)
+            .call(d3.axisBottom(xSc).ticks(7));
+        g.append('g').attr('class','axis')
+            .call(d3.axisLeft(ySc).ticks(8));
+        g.append('text').attr('class','axis-label').attr('text-anchor','middle')
+            .attr('x', PW/2).attr('y', PH+40).text('y  (position)');
+        g.append('text').attr('class','axis-label').attr('text-anchor','middle')
+            .attr('transform','rotate(-90)').attr('x', -PH/2).attr('y', -50)
+            .text("y'  (velocity)");
+        // Crosshairs (drawn last so they appear on top of grid but under data)
+        g.append('line').attr('class','crosshair')
+            .attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',PH);
+        g.append('line').attr('class','crosshair')
+            .attr('x1',0).attr('x2',PW).attr('y1',ySc(0)).attr('y2',ySc(0));
+
+        const clipG = g.append('g').attr('clip-path', 'url(#clip)');
+
+        // ── Vector field ─────────────────────────────────────────────────────────
+        const NX = 18, NY = 14;
+        const HALF = 7, AH = 4; // arrow half-length, arrowhead size
+
+        const gridXVals = d3.range(NX).map(i => X_DOM[0] + i*(X_DOM[1]-X_DOM[0])/(NX-1));
+        const gridYVals = d3.range(NY).map(i => Y_DOM[0] + i*(Y_DOM[1]-Y_DOM[0])/(NY-1));
+
+        // Precompute max speed across all μ and grid to fix color scale
+        let maxSpeed = 0;
+        for (let mu = 0.1; mu <= 5.01; mu += 0.25) {
+            gridXVals.forEach(gx => {
+                gridYVals.forEach(gy => {
+                    const [fx,fy] = vdpRHS(gx, gy, mu);
+                    maxSpeed = Math.max(maxSpeed, Math.sqrt(fx*fx+fy*fy));
+                });
+            });
+        }
+        const speedColor = d3.scaleSequential(d3.interpolateViridis)
+            .domain([0, Math.log1p(maxSpeed)]);
+        function spColor(speed) { return speedColor(Math.log1p(speed)); }
+
+        const arrowData = [];
+        const arrowsG = clipG.append('g').attr('class', 'arrows');
+        gridXVals.forEach(gx => {
+            gridYVals.forEach(gy => {
+                const outer = arrowsG.append('g')
+                    .attr('transform', `translate(${xSc(gx)},${ySc(gy)})`);
+                const inner = outer.append('g');
+                // Shaft
+                inner.append('line').attr('x1',-HALF).attr('y1',0).attr('x2',HALF).attr('y2',0);
+                // Arrowhead
+                inner.append('line').attr('x1',HALF).attr('y1',0).attr('x2',HALF-AH).attr('y2',-AH*0.55);
+                inner.append('line').attr('x1',HALF).attr('y1',0).attr('x2',HALF-AH).attr('y2', AH*0.55);
+                inner.selectAll('line').attr('stroke-linecap','round').attr('stroke-width',1);
+                arrowData.push({ inner, gx, gy });
+            });
+        });
+
+        // ── Nullclines ───────────────────────────────────────────────────────────
+        // x-nullcline: dx/dt = y' = 0  →  horizontal line at y'=0
+        clipG.append('line')
+            .attr('x1',0).attr('x2',PW)
+            .attr('y1',ySc(0)).attr('y2',ySc(0))
+            .attr('stroke','#00bcd4').attr('stroke-width',2);
+
+        // y-nullcline: dy'/dt = 0  →  y' = x / [μ(1-x²)], three segments
+        const YNULL_N = 300;
+        function ynSeg(mu, x0, x1) {
+            const pts = [];
+            for (let i = 0; i <= YNULL_N; i++) {
+                const x = x0 + (x1-x0)*i/YNULL_N;
+                const denom = mu*(1-x*x);
+                if (Math.abs(denom) < 0.04) continue;
+                const yp = x/denom;
+                if (yp < Y_DOM[0] || yp > Y_DOM[1]) continue;
+                pts.push([x, yp]);
+            }
+            return pts;
+        }
+        const ynLeft   = clipG.append('path').attr('fill','none').attr('stroke','#ff9800').attr('stroke-width',2);
+        const ynCenter = clipG.append('path').attr('fill','none').attr('stroke','#ff9800').attr('stroke-width',2);
+        const ynRight  = clipG.append('path').attr('fill','none').attr('stroke','#ff9800').attr('stroke-width',2);
+
+        // ── Limit cycle reference ────────────────────────────────────────────────
+        const lcPath = clipG.append('path').attr('fill','none')
+            .attr('stroke-width',2).attr('stroke-dasharray','5,3').attr('opacity',0.65);
+
+        // ── Equilibrium at (0,0) ─────────────────────────────────────────────────
+        g.append('circle').attr('cx',xSc(0)).attr('cy',ySc(0)).attr('r',5)
+            .attr('fill','#111').attr('stroke','#fff').attr('stroke-width',1.5);
+
+        // ── Legend ───────────────────────────────────────────────────────────────
+        const legG = g.append('g').attr('transform', `translate(${PW-172}, 12)`);
+        legG.append('rect').attr('x',-6).attr('y',-6)
+            .attr('width',182).attr('height',106).attr('rx',4)
+            .attr('fill','rgba(17,17,17,0.9)').attr('stroke','#444').attr('stroke-width',0.5);
+
+        function legItem(y, color, dash, label, circle) {
+            if (circle) {
+                legG.append('circle').attr('cx',11).attr('cy',y).attr('r',4)
+                    .attr('fill','#111').attr('stroke',color).attr('stroke-width',1.5);
+            } else {
+                const l = legG.append('line').attr('x1',0).attr('x2',22).attr('y1',y).attr('y2',y)
+                    .attr('stroke',color).attr('stroke-width',2);
+                if (dash) l.attr('stroke-dasharray','5,3');
+            }
+            legG.append('text').attr('x',28).attr('y',y+4)
+                .attr('fill','#bbb').attr('font-size','11px').text(label);
+        }
+        legItem(12,  '#00bcd4', false, "x-nullcline  (y' = 0)");
+        legItem(36,  '#ff9800', false, "y-nullcline  (x / μ(1−x²))");
+        legItem(60,  '#aaa',    true,  'Limit cycle (dashed)');
+        legItem(84,  '#fff',    false, 'Equilibrium  (0, 0)', true);
+
+        // ── Update on μ change ───────────────────────────────────────────────────
+        function update(mu) {
+            document.getElementById('mu-display').textContent = mu.toFixed(2);
+            document.getElementById('mu-swatch').style.backgroundColor = muColor(mu);
+
+            // Arrows
+            arrowData.forEach(({ inner, gx, gy }) => {
+                const [fx, fy] = vdpRHS(gx, gy, mu);
+                const speed = Math.sqrt(fx*fx + fy*fy);
+                if (speed < 0.001) {
+                    inner.attr('transform', 'rotate(0)');
+                    inner.selectAll('line').attr('stroke', '#333');
+                    return;
+                }
+                // Negate fy because SVG y-axis points down
+                const angle = Math.atan2(-fy, fx) * 180 / Math.PI;
+                inner.attr('transform', `rotate(${angle})`);
+                inner.selectAll('line').attr('stroke', spColor(speed));
+            });
+
+            // y-nullcline segments
+            ynLeft.attr('d',   phLine(ynSeg(mu, -3.49, -1.06)));
+            ynCenter.attr('d', phLine(ynSeg(mu, -0.94,  0.94)));
+            ynRight.attr('d',  phLine(ynSeg(mu,  1.06,  3.49)));
+
+            // Limit cycle
+            lcPath.attr('stroke', muColor(mu)).attr('d', phLine(computeLC(mu)));
+        }
+
+        const muSlider = document.getElementById('mu-slider');
+        muSlider.addEventListener('input', () => update(+muSlider.value));
+        update(1.0);
+    </script>
+</body>
+</html>
