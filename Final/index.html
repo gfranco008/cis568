@@ -101,6 +101,19 @@
         .grid path { stroke: none; }
         .crosshair { stroke: #333; stroke-dasharray: 4,3; }
         .axis-label { fill: #888; font-size: 12px; }
+        #charts-bottom {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: center;
+        }
+        .chart-wide {
+            flex: 1 1 100%;
+            max-width: 1200px;
+        }
+        .legend-item text { fill: #bbb; font-size: 11px; }
+        .legend-item line { stroke-width: 2; }
     </style>
 </head>
 <body>
@@ -118,12 +131,19 @@
 
     <div id="charts">
         <div class="chart-panel">
-            <h2>Phase Portrait &nbsp;(x vs dx/dt)</h2>
+            <h2>y vs t</h2>
             <div id="phase-container"></div>
         </div>
         <div class="chart-panel">
             <h2>Time Series &nbsp;(x vs t)</h2>
             <div id="time-container"></div>
+        </div>
+    </div>
+
+    <div id="charts-bottom">
+        <div class="chart-panel chart-wide">
+            <h2>Phase Portrait &nbsp;(y vs y') &nbsp;— all μ</h2>
+            <div id="phase-all-container"></div>
         </div>
     </div>
 
@@ -158,14 +178,17 @@
             let px = 2.0, py = 0.0;
             const phasePoints = [];
             const timePoints  = [];
+            const yTimePoints = [];
             for (let i = 0; i < N_STEPS; i++) {
                 [px, py] = rk4Step(px, py, mu, H);
                 if (i >= N_TRANSIENT) {
+                    const t = (i - N_TRANSIENT) * H;
                     phasePoints.push([px, py]);
-                    timePoints.push([(i - N_TRANSIENT) * H, px]);
+                    timePoints.push([t, px]);
+                    yTimePoints.push([t, py]);
                 }
             }
-            return { phasePoints, timePoints };
+            return { phasePoints, timePoints, yTimePoints };
         }
 
         // ── Frame Cache ──────────────────────────────────────────────────────────
@@ -188,106 +211,154 @@
             .domain([MU_MIN, MU_MAX])
             .interpolator(d3.interpolatePlasma);
 
-        // ── D3 Chart Setup ───────────────────────────────────────────────────────
-        const MARGIN  = { top: 22, right: 22, bottom: 48, left: 58 };
-        const VB_W    = 560;
-        const VB_H    = 400;
-        const PLOT_W  = VB_W - MARGIN.left - MARGIN.right;
-        const PLOT_H  = VB_H - MARGIN.top  - MARGIN.bottom;
+        // ── Shared chart helpers ─────────────────────────────────────────────────
+        const MARGIN = { top: 22, right: 22, bottom: 48, left: 58 };
+        const VB_W   = 560;
+        const VB_H   = 400;
+        const PLOT_W = VB_W - MARGIN.left - MARGIN.right;
+        const PLOT_H = VB_H - MARGIN.top  - MARGIN.bottom;
 
-        function buildChart(containerId) {
+        function buildChart(containerId, vbW, vbH) {
             const svg = d3.select(`#${containerId}`)
                 .append('svg')
-                .attr('viewBox', `0 0 ${VB_W} ${VB_H}`)
+                .attr('viewBox', `0 0 ${vbW} ${vbH}`)
                 .attr('preserveAspectRatio', 'xMidYMid meet');
             return svg.append('g')
                 .attr('transform', `translate(${MARGIN.left},${MARGIN.top})`);
         }
 
-        function addGrid(g, xScale, yScale, xTicks, yTicks) {
+        function addGrid(g, xScale, yScale, xTicks, yTicks, plotW, plotH) {
             g.append('g').attr('class', 'grid')
-                .attr('transform', `translate(0,${PLOT_H})`)
-                .call(d3.axisBottom(xScale).ticks(xTicks).tickSize(-PLOT_H).tickFormat(''));
+                .attr('transform', `translate(0,${plotH})`)
+                .call(d3.axisBottom(xScale).ticks(xTicks).tickSize(-plotH).tickFormat(''));
             g.append('g').attr('class', 'grid')
-                .call(d3.axisLeft(yScale).ticks(yTicks).tickSize(-PLOT_W).tickFormat(''));
+                .call(d3.axisLeft(yScale).ticks(yTicks).tickSize(-plotW).tickFormat(''));
         }
 
-        function addAxes(g, xScale, yScale, xTicks, yTicks, xLabel, yLabel) {
+        function addAxes(g, xScale, yScale, xTicks, yTicks, xLabel, yLabel, plotW, plotH) {
             g.append('g').attr('class', 'axis')
-                .attr('transform', `translate(0,${PLOT_H})`)
+                .attr('transform', `translate(0,${plotH})`)
                 .call(d3.axisBottom(xScale).ticks(xTicks));
             g.append('g').attr('class', 'axis')
                 .call(d3.axisLeft(yScale).ticks(yTicks));
-            // x-axis label
             g.append('text').attr('class', 'axis-label')
                 .attr('text-anchor', 'middle')
-                .attr('x', PLOT_W / 2)
-                .attr('y', PLOT_H + 40)
+                .attr('x', plotW / 2).attr('y', plotH + 40)
                 .text(xLabel);
-            // y-axis label
             g.append('text').attr('class', 'axis-label')
                 .attr('text-anchor', 'middle')
                 .attr('transform', 'rotate(-90)')
-                .attr('x', -PLOT_H / 2)
-                .attr('y', -46)
+                .attr('x', -plotH / 2).attr('y', -46)
                 .text(yLabel);
         }
 
-        function addCrosshair(g, xScale, yScale) {
+        function addCrosshairs(g, xScale, yScale, plotW, plotH) {
             g.append('line').attr('class', 'crosshair')
                 .attr('x1', xScale(0)).attr('x2', xScale(0))
-                .attr('y1', 0).attr('y2', PLOT_H);
+                .attr('y1', 0).attr('y2', plotH);
             g.append('line').attr('class', 'crosshair')
-                .attr('x1', 0).attr('x2', PLOT_W)
+                .attr('x1', 0).attr('x2', plotW)
                 .attr('y1', yScale(0)).attr('y2', yScale(0));
         }
 
-        // Phase portrait
-        const phaseXScale = d3.scaleLinear().domain([-3.5, 3.5]).range([0, PLOT_W]);
-        const phaseYScale = d3.scaleLinear().domain([-7,   7  ]).range([PLOT_H, 0]);
-        const phaseG = buildChart('phase-container');
-        addGrid(phaseG, phaseXScale, phaseYScale, 6, 6);
-        addAxes(phaseG, phaseXScale, phaseYScale, 6, 6, 'x  (position)', 'dx/dt  (velocity)');
-        addCrosshair(phaseG, phaseXScale, phaseYScale);
-        const phasePath = phaseG.append('path')
-            .attr('fill', 'none')
-            .attr('stroke-width', 1.8)
-            .attr('stroke-linecap', 'round')
-            .attr('stroke-linejoin', 'round');
+        // ── Top-left: y(t) ───────────────────────────────────────────────────────
+        const svXScale = d3.scaleLinear().domain([0, T_TOTAL - T_TRANSIENT]).range([0, PLOT_W]);
+        const svYScale = d3.scaleLinear().domain([-7.5, 7.5]).range([PLOT_H, 0]);
+        const svLine   = d3.line().x(d => svXScale(d[0])).y(d => svYScale(d[1]));
+        const svG = buildChart('phase-container', VB_W, VB_H);
+        addGrid(svG, svXScale, svYScale, 6, 6, PLOT_W, PLOT_H);
+        addAxes(svG, svXScale, svYScale, 6, 6, 't', 'y', PLOT_W, PLOT_H);
+        addCrosshairs(svG, svXScale, svYScale, PLOT_W, PLOT_H);
+        const svYPath = svG.append('path')
+            .attr('fill', 'none').attr('stroke-width', 1.8)
+            .attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
 
-        // Time series
+        // ── Top-right: time series x(t) ──────────────────────────────────────────
         const timeXScale = d3.scaleLinear().domain([0, T_TOTAL - T_TRANSIENT]).range([0, PLOT_W]);
         const timeYScale = d3.scaleLinear().domain([-3.5, 3.5]).range([PLOT_H, 0]);
-        const timeG = buildChart('time-container');
-        addGrid(timeG, timeXScale, timeYScale, 6, 6);
-        addAxes(timeG, timeXScale, timeYScale, 6, 6, 't  (time)', 'x  (position)');
-        addCrosshair(timeG, timeXScale, timeYScale);
+        const timeLine   = d3.line().x(d => timeXScale(d[0])).y(d => timeYScale(d[1]));
+        const timeG = buildChart('time-container', VB_W, VB_H);
+        addGrid(timeG, timeXScale, timeYScale, 6, 6, PLOT_W, PLOT_H);
+        addAxes(timeG, timeXScale, timeYScale, 6, 6, 't  (time)', 'x  (position)', PLOT_W, PLOT_H);
+        addCrosshairs(timeG, timeXScale, timeYScale, PLOT_W, PLOT_H);
         const timePath = timeG.append('path')
             .attr('fill', 'none')
             .attr('stroke-width', 1.5)
             .attr('stroke-linecap', 'round')
             .attr('stroke-linejoin', 'round');
 
-        // D3 line generators
-        const phaseLine = d3.line()
-            .x(d => phaseXScale(d[0]))
-            .y(d => phaseYScale(d[1]));
+        // ── Bottom: overlaid phase portrait (all μ up to current) ────────────────
+        const PHASE_MUS  = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0];
+        const ALL_VB_W   = 760;
+        const ALL_VB_H   = 520;
+        const ALL_PLOT_W = ALL_VB_W - MARGIN.left - MARGIN.right;
+        const ALL_PLOT_H = ALL_VB_H - MARGIN.top  - MARGIN.bottom;
 
-        const timeLine = d3.line()
-            .x(d => timeXScale(d[0]))
-            .y(d => timeYScale(d[1]));
+        const allPhaseXScale = d3.scaleLinear().domain([-3.5, 3.5]).range([0, ALL_PLOT_W]);
+        const allPhaseYScale = d3.scaleLinear().domain([-7,   7  ]).range([ALL_PLOT_H, 0]);
+        const allPhaseLine   = d3.line().x(d => allPhaseXScale(d[0])).y(d => allPhaseYScale(d[1]));
+
+        const allG = buildChart('phase-all-container', ALL_VB_W, ALL_VB_H);
+        addGrid(allG, allPhaseXScale, allPhaseYScale, 6, 7, ALL_PLOT_W, ALL_PLOT_H);
+        addAxes(allG, allPhaseXScale, allPhaseYScale, 6, 7, 'y', "y'", ALL_PLOT_W, ALL_PLOT_H);
+        addCrosshairs(allG, allPhaseXScale, allPhaseYScale, ALL_PLOT_W, ALL_PLOT_H);
+
+        // Legend (top-left corner, every 1.0)
+        const legendMus = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+        const legendG = allG.append('g').attr('transform', 'translate(8,8)');
+        legendG.append('rect')
+            .attr('x', -4).attr('y', -4)
+            .attr('width', 100).attr('height', legendMus.length * 18 + 6)
+            .attr('fill', 'rgba(17,17,17,0.8)').attr('rx', 3);
+        legendMus.forEach((mu, i) => {
+            const lg = legendG.append('g').attr('transform', `translate(0,${i * 18})`);
+            lg.append('line')
+                .attr('x1', 0).attr('x2', 24).attr('y1', 8).attr('y2', 8)
+                .attr('stroke', mu < MU_MIN ? muColor(MU_MIN) : muColor(mu))
+                .attr('stroke-width', 1.8)
+                .attr('id', `alg-${i}`);
+            lg.append('text').attr('x', 30).attr('y', 12)
+                .attr('fill', '#aaa').attr('font-size', '11px')
+                .text(`μ = ${mu.toFixed(1)}`);
+        });
+
+        // Pre-allocate one path per PHASE_MUS; data set immediately
+        const allPhaseCurves = PHASE_MUS.map(mu => {
+            const frameMu = mu < MU_MIN ? MU_MIN : mu;
+            const { phasePoints } = getFrame(frameMu);
+            const path = allG.append('path')
+                .attr('fill', 'none')
+                .attr('stroke', muColor(frameMu))
+                .attr('stroke-width', 1.5)
+                .attr('stroke-linecap', 'round')
+                .attr('stroke-linejoin', 'round')
+                .attr('opacity', 0)
+                .attr('d', allPhaseLine(phasePoints));
+            return { mu, path };
+        });
 
         // ── Render ───────────────────────────────────────────────────────────────
         const muDisplay = document.getElementById('mu-display');
         const muSwatch  = document.getElementById('mu-swatch');
 
         function renderFrame(mu) {
-            const qmu = quantize(mu);
-            const { phasePoints, timePoints } = getFrame(qmu);
+            const qmu   = quantize(mu);
             const color = muColor(qmu);
+            const { timePoints, yTimePoints } = getFrame(qmu);
 
-            phasePath.attr('stroke', color).attr('d', phaseLine(phasePoints));
+            // Top-left: y(t)
+            svYPath.attr('stroke', color).attr('d', svLine(yTimePoints));
+
+            // Top-right: time series x(t)
             timePath.attr('stroke', color).attr('d', timeLine(timePoints));
+
+            // Bottom: show all curves up to current μ, highlight the highest visible
+            const topVisible = PHASE_MUS.filter(m => m <= qmu + 0.001).at(-1);
+            allPhaseCurves.forEach(({ mu: cmu, path }) => {
+                const visible = cmu <= qmu + 0.001;
+                path.attr('opacity', visible ? 1 : 0)
+                    .attr('stroke-width', cmu === topVisible ? 2.5 : 1.5);
+            });
 
             muDisplay.textContent = qmu.toFixed(2);
             muSwatch.style.backgroundColor = color;
@@ -336,7 +407,6 @@
         // ── Init ─────────────────────────────────────────────────────────────────
         renderFrame(1.0);
 
-        // Prewarm cache in background chunks
         (function prewarm() {
             const steps = [];
             for (let mu = MU_MIN; mu <= MU_MAX + 0.001; mu += MU_STEP) {
