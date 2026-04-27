@@ -16,17 +16,46 @@
             align-items: center;
             color: #fff;
         }
-        nav {
+        .nav {
             width: 100%;
             max-width: 1200px;
             margin-bottom: 14px;
-            font-size: 13px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
         }
-        nav a {
-            color: #2b83ba;
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 7px 12px;
+            border-radius: 999px;
+            border: 1px solid #3c3c3c;
+            background: linear-gradient(180deg, #2a2a2a 0%, #1d1d1d 100%);
+            color: #cfd8dc;
             text-decoration: none;
+            font-size: 12px;
+            letter-spacing: 0.02em;
+            transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
         }
-        nav a:hover { text-decoration: underline; }
+        .nav-btn:hover {
+            border-color: #4aa3d8;
+            color: #fff;
+            background: linear-gradient(180deg, #313131 0%, #242424 100%);
+            transform: translateY(-1px);
+        }
+        .nav-btn:focus-visible {
+            outline: 2px solid #4aa3d8;
+            outline-offset: 2px;
+        }
+        .nav-btn.active,
+        .nav-btn[aria-current="page"] {
+            color: #fff;
+            border-color: #57b5e8;
+            background: linear-gradient(180deg, #2b83ba 0%, #1f648f 100%);
+            box-shadow: 0 0 0 1px rgba(87,181,232,0.25);
+        }
         h1 {
             margin-top: 0;
             margin-bottom: 4px;
@@ -127,14 +156,14 @@
     </style>
 </head>
 <body>
-    <nav>
-        <a href="index.html">Effect of μ</a> &nbsp;|&nbsp;
-        Time Evolution &nbsp;|&nbsp;
-        <a href="page3.html">Basin of Attraction</a> &nbsp;|&nbsp;
-        <a href="page4.html">Vector Field</a> &nbsp;|&nbsp;
-        <a href="page5.html">Amplitude &amp; Period</a> &nbsp;|&nbsp;
-        <a href="page6.html">Chebyshev Interpolation</a> &nbsp;|&nbsp;
-        <a href="page7.html">Surrogate vs μ</a>
+    <nav class="nav" aria-label="Pages">
+        <a class="nav-btn" href="index.html">Effect of μ</a>
+        <a class="nav-btn active" href="page2.html" aria-current="page">Time Evolution</a>
+        <a class="nav-btn" href="page3.html">Basin of Attraction</a>
+        <a class="nav-btn" href="page4.html">Vector Field</a>
+        <a class="nav-btn" href="page5.html">Amplitude &amp; Period</a>
+        <a class="nav-btn" href="page6.html">Chebyshev Interpolation</a>
+        <a class="nav-btn" href="page7.html">Surrogate vs μ</a>
     </nav>
     <h1>Van der Pol Oscillator — Time Evolution <button class="info-btn" aria-label="About this visualization">?</button></h1>
     <p class="subtitle">

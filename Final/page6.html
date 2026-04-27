@@ -16,17 +16,46 @@
             align-items: center;
             color: #fff;
         }
-        nav {
+        .nav {
             width: 100%;
             max-width: 1200px;
             margin-bottom: 14px;
-            font-size: 13px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
         }
-        nav a {
-            color: #2b83ba;
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 7px 12px;
+            border-radius: 999px;
+            border: 1px solid #3c3c3c;
+            background: linear-gradient(180deg, #2a2a2a 0%, #1d1d1d 100%);
+            color: #cfd8dc;
             text-decoration: none;
+            font-size: 12px;
+            letter-spacing: 0.02em;
+            transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
         }
-        nav a:hover { text-decoration: underline; }
+        .nav-btn:hover {
+            border-color: #4aa3d8;
+            color: #fff;
+            background: linear-gradient(180deg, #313131 0%, #242424 100%);
+            transform: translateY(-1px);
+        }
+        .nav-btn:focus-visible {
+            outline: 2px solid #4aa3d8;
+            outline-offset: 2px;
+        }
+        .nav-btn.active,
+        .nav-btn[aria-current="page"] {
+            color: #fff;
+            border-color: #57b5e8;
+            background: linear-gradient(180deg, #2b83ba 0%, #1f648f 100%);
+            box-shadow: 0 0 0 1px rgba(87,181,232,0.25);
+        }
         h1 {
             margin-top: 0;
             margin-bottom: 4px;
@@ -129,14 +158,39 @@
             margin-top: 14px;
             width: 100%;
             max-width: 1200px;
-            display: flex;
-            gap: 18px;
-            flex-wrap: wrap;
-            justify-content: center;
-            color: #bcbcbc;
-            font-size: 13px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
         }
-        #metrics strong { color: #fff; }
+        .metric-card {
+            background: #141414;
+            border: 1px solid #3f3f3f;
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+        .metric-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 0.82rem;
+            color: #d7d7d7;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
+            font-size: 12px;
+            color: #aeb7bf;
+            margin-bottom: 5px;
+        }
+        .metric-row:last-child { margin-bottom: 0; }
+        .metric-label { color: #94a3ad; }
+        .metric-value {
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+        }
 
         .legend {
             margin-top: 10px;
@@ -178,14 +232,14 @@
     </style>
 </head>
 <body>
-    <nav>
-        <a href="index.html">Effect of μ</a> &nbsp;|&nbsp;
-        <a href="page2.html">Time Evolution</a> &nbsp;|&nbsp;
-        <a href="page3.html">Basin of Attraction</a> &nbsp;|&nbsp;
-        <a href="page4.html">Vector Field</a> &nbsp;|&nbsp;
-        <a href="page5.html">Amplitude &amp; Period</a> &nbsp;|&nbsp;
-        Chebyshev Interpolation &nbsp;|&nbsp;
-        <a href="page7.html">Surrogate vs μ</a>
+    <nav class="nav" aria-label="Pages">
+        <a class="nav-btn" href="index.html">Effect of μ</a>
+        <a class="nav-btn" href="page2.html">Time Evolution</a>
+        <a class="nav-btn" href="page3.html">Basin of Attraction</a>
+        <a class="nav-btn" href="page4.html">Vector Field</a>
+        <a class="nav-btn" href="page5.html">Amplitude &amp; Period</a>
+        <a class="nav-btn active" href="page6.html" aria-current="page">Chebyshev Interpolation</a>
+        <a class="nav-btn" href="page7.html">Surrogate vs μ</a>
     </nav>
 
     <h1>Van der Pol — Barycentric Lagrange Interpolation <button class="info-btn" aria-label="About this visualization">?</button></h1>
@@ -251,17 +305,61 @@
     </div>
 
     <div id="metrics">
-        <span>interval: <strong id="interval-text">-</strong></span>
-        <span>max error x(t) (equispaced): <strong id="max-equi">-</strong></span>
-        <span>max error x(t) (Chebyshev): <strong id="max-cheb">-</strong></span>
-        <span>ratio x(t) (equi/cheb): <strong id="ratio-text">-</strong></span>
-        <span>max error x'(t) (equispaced): <strong id="max-equi-v">-</strong></span>
-        <span>max error x'(t) (Chebyshev): <strong id="max-cheb-v">-</strong></span>
-        <span>ratio x'(t) (equi/cheb): <strong id="ratio-text-v">-</strong></span>
-        <span>tail slope x(t) log10(error)/n (equi): <strong id="slope-equi">-</strong></span>
-        <span>tail slope x(t) log10(error)/n (cheb): <strong id="slope-cheb">-</strong></span>
-        <span>tail slope x'(t) log10(error)/n (equi): <strong id="slope-equi-v">-</strong></span>
-        <span>tail slope x'(t) log10(error)/n (cheb): <strong id="slope-cheb-v">-</strong></span>
+        <div class="metric-card">
+            <h3>Window</h3>
+            <div class="metric-row">
+                <span class="metric-label">Evaluation interval</span>
+                <strong class="metric-value" id="interval-text">-</strong>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <h3>x(t) Error Summary</h3>
+            <div class="metric-row">
+                <span class="metric-label">Max error (equispaced)</span>
+                <strong class="metric-value" id="max-equi">-</strong>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Max error (Chebyshev)</span>
+                <strong class="metric-value" id="max-cheb">-</strong>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Error ratio (equi/cheb)</span>
+                <strong class="metric-value" id="ratio-text">-</strong>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Tail slope (equispaced)</span>
+                <strong class="metric-value" id="slope-equi">-</strong>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Tail slope (Chebyshev)</span>
+                <strong class="metric-value" id="slope-cheb">-</strong>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <h3>x'(t) Error Summary</h3>
+            <div class="metric-row">
+                <span class="metric-label">Max error (equispaced)</span>
+                <strong class="metric-value" id="max-equi-v">-</strong>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Max error (Chebyshev)</span>
+                <strong class="metric-value" id="max-cheb-v">-</strong>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Error ratio (equi/cheb)</span>
+                <strong class="metric-value" id="ratio-text-v">-</strong>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Tail slope (equispaced)</span>
+                <strong class="metric-value" id="slope-equi-v">-</strong>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Tail slope (Chebyshev)</span>
+                <strong class="metric-value" id="slope-cheb-v">-</strong>
+            </div>
+        </div>
     </div>
 
     <script>
