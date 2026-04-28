@@ -35,7 +35,7 @@ Notes:
 - What it means:
   The same ODE changes qualitative behavior as one parameter changes.
   Increasing `μ` increases nonlinearity and separates slow and fast dynamics.
-  This is a direct visual signature of parametric sensitivity in nonlinear systems.
+  That is what parametric sensitivity looks like in a nonlinear system.
 
 ### 2) Time Evolution (`page2.html`)
 - Axes and encodings:
@@ -47,7 +47,7 @@ Notes:
   Pause at early, middle, and late time to inspect transient behavior.
   Change `μ` and rerun to compare how quickly trajectories approach steady oscillation.
 - What it means:
-  You are seeing transient-to-steady-state convergence.
+  What you are watching is the transient dying out and the steady state taking over.
   The system "forgets" initial conditions as it approaches the attractor.
   Convergence speed depends on `μ`, which matters for stability and modeling timescales.
 
@@ -62,8 +62,8 @@ Notes:
   Use the legend to track each initial condition path over time.
 - What it means:
   Convergence from many distinct initial states indicates a global attractor.
-  The long-term behavior is robust to initial-condition uncertainty.
-  This is an important dynamical property for reliable prediction.
+  The long-term behavior does not depend on where you started.
+  A system with this property is much easier to reason about and predict.
 
 ### 4) Vector Field + Nullclines (`page4.html`)
 - Axes and encodings:
@@ -78,7 +78,7 @@ Notes:
   Compare trajectory orientation near each nullcline to see sign changes in derivatives.
   Move `μ` and observe geometric deformation of nullclines and flow strength.
 - What it means:
-  This is the geometric explanation of the dynamics, not just trajectory output.
+  It gives you a geometric understanding of why the system behaves the way it does, not just what a single trajectory looks like.
   Nullclines partition phase space into regions with different derivative signs.
   The structure explains why trajectories circulate and settle onto the cycle.
 
@@ -95,7 +95,7 @@ Notes:
 - What it means:
   This converts visual oscillation shape into quantitative metrics.
   Low-`μ` behavior approximates linear oscillation period; high-`μ` behavior departs strongly.
-  It validates expected asymptotic trends and supports numerical trustworthiness.
+  It also confirms that the solver is behaving correctly by matching the known linear period at low μ.
 
 ### 6) Barycentric Lagrange Interpolation (`page6.html`)
 - Axes and encodings:
@@ -109,7 +109,7 @@ Notes:
   Increase `n` and monitor whether red/teal errors decay or oscillate.
   Use convergence panel slope to compare method quality across degrees.
 - What it means:
-  It shows interpolation is a numerical modeling choice, not just plotting.
+  Interpolation is a real modeling decision, not just a plotting convenience.
   Node placement strongly affects stability and worst-case error.
   Chebyshev nodes typically reduce extreme error growth at higher degree.
 
@@ -126,9 +126,9 @@ Notes:
   Check error profile to identify where each method struggles in parameter space.
   Increase `N` and compare improvement in error against runtime growth.
 - What it means:
-  This is the practical surrogate-model selection step for parameter studies.
+  This is where you actually decide which surrogate strategy to use for a parameter study.
   You can evaluate both accuracy and computational cost in one place.
-  It supports choosing training-node strategy under real analysis constraints.
+  It helps you pick a node strategy that fits your actual accuracy and runtime budget.
 
 ## Why Each Visualization Matters (What / Why / How)
 
