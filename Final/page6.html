@@ -85,6 +85,20 @@
         input[type=range] { cursor: pointer; }
         #mu-slider { width: 210px; }
         #n-slider { width: 200px; }
+        #mu-play-btn {
+            background: #2b83ba;
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #mu-play-btn:hover { background: #3e9ed6; }
+        #mu-play-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
         .method-toggle {
             display: inline-flex;
             align-items: center;
@@ -115,7 +129,7 @@
         #status {
             font-size: 12px;
             color: #8d8d8d;
-            min-width: 110px;
+            min-width: 210px;
             text-align: center;
         }
         #charts {
@@ -255,6 +269,7 @@
             <span id="mu-swatch"></span>
         </label>
         <input id="mu-slider" type="range" min="0.10" max="5.00" step="0.05" value="1.00">
+        <button id="mu-play-btn" type="button">▶ Play μ</button>
 
         <label>degree n = <span id="n-display">16</span></label>
         <input id="n-slider" type="range" min="4" max="48" step="1" value="16">
@@ -796,6 +811,7 @@
         const convChVelDot = convChart.g.append('circle').attr('r', 4).attr('fill', '#111').attr('stroke', COLORS.cheb).attr('stroke-width', 1.6);
 
         const muSlider = document.getElementById('mu-slider');
+        const muPlayBtn = document.getElementById('mu-play-btn');
         const muDisplay = document.getElementById('mu-display');
         const muSwatch = document.getElementById('mu-swatch');
         const nSlider = document.getElementById('n-slider');
@@ -805,7 +821,42 @@
         const showCheb = document.getElementById('show-cheb');
         const statusEl = document.getElementById('status');
 
+        const MU_PLAY_INTERVAL_MS = 240;
+        const precomputeMus = (() => {
+            const vals = [];
+            for (let mu = MU_MIN; mu <= MU_MAX + 1e-9; mu += MU_STEP) {
+                vals.push(quantizeMu(mu));
+            }
+            return Array.from(new Set(vals.map(v => v.toFixed(2)))).map(s => +s);
+        })();
+
         let redrawToken = 0;
+        let isPlaying = false;
+        let playTimer = null;
+        let isComputing = false;
+        let isPrecomputing = false;
+        let precomputeMsg = '';
+
+        function updateStatus() {
+            if (isPrecomputing) {
+                statusEl.textContent = precomputeMsg;
+                return;
+            }
+            if (isPlaying) {
+                statusEl.textContent = 'Playing μ...';
+                return;
+            }
+            statusEl.textContent = isComputing ? 'computing...' : '';
+        }
+
+        function setControlsEnabled(enabled) {
+            muSlider.disabled = !enabled;
+            muPlayBtn.disabled = !enabled;
+            nSlider.disabled = !enabled;
+            windowSelect.disabled = !enabled;
+            showEqui.disabled = !enabled;
+            showCheb.disabled = !enabled;
+        }
 
         function applyMethodVisibility() {
             const equiVisible = showEqui.checked;
@@ -1017,25 +1068,106 @@
 
             setMetrics(single, convRows, t0, t1);
             applyMethodVisibility();
-            statusEl.textContent = '';
         }
 
         function requestRedraw() {
             const token = ++redrawToken;
-            statusEl.textContent = 'computing...';
+            isComputing = true;
+            updateStatus();
             setTimeout(() => {
                 if (token !== redrawToken) return;
                 redraw();
+                isComputing = false;
+                updateStatus();
             }, 0);
         }
 
+        function stopMuPlayback() {
+            isPlaying = false;
+            if (playTimer !== null) {
+                clearTimeout(playTimer);
+                playTimer = null;
+            }
+            muPlayBtn.textContent = '▶ Play μ';
+            updateStatus();
+        }
+
+        function scheduleMuPlaybackStep(delay = MU_PLAY_INTERVAL_MS) {
+            if (!isPlaying) return;
+            playTimer = setTimeout(stepMuPlayback, delay);
+        }
+
+        function stepMuPlayback() {
+            if (!isPlaying) return;
+            if (isComputing) {
+                scheduleMuPlaybackStep(60);
+                return;
+            }
+
+            const muStep = +(muSlider.step || MU_STEP);
+            const muMin = +muSlider.min;
+            const muMax = +muSlider.max;
+            let next = +(+muSlider.value + muStep).toFixed(10);
+            if (next > muMax + 1e-9) next = muMin;
+
+            muSlider.value = next.toFixed(2);
+            requestRedraw();
+            scheduleMuPlaybackStep();
+        }
+
+        function precomputeAllAsync(onDone) {
+            let i = 0;
+            const total = precomputeMus.length;
+            const CHUNK = 2;
+            isPrecomputing = true;
+
+            function step() {
+                const end = Math.min(total, i + CHUNK);
+                for (; i < end; i++) getReference(precomputeMus[i]);
+                const pct = Math.round((100 * i) / total);
+                precomputeMsg = `Precomputing trajectories... ${i}/${total} (${pct}%)`;
+                updateStatus();
+
+                if (i < total) setTimeout(step, 0);
+                else {
+                    isPrecomputing = false;
+                    precomputeMsg = '';
+                    updateStatus();
+                    onDone();
+                }
+            }
+
+            step();
+        }
+
         muSlider.addEventListener('input', requestRedraw);
-        nSlider.addEventListener('input', requestRedraw);
-        windowSelect.addEventListener('change', requestRedraw);
+        nSlider.addEventListener('input', () => {
+            if (isPlaying) stopMuPlayback();
+            requestRedraw();
+        });
+        windowSelect.addEventListener('change', () => {
+            if (isPlaying) stopMuPlayback();
+            requestRedraw();
+        });
         showEqui.addEventListener('change', requestRedraw);
         showCheb.addEventListener('change', requestRedraw);
 
-        requestRedraw();
+        muPlayBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                stopMuPlayback();
+                return;
+            }
+            isPlaying = true;
+            muPlayBtn.textContent = '❚❚ Pause μ';
+            updateStatus();
+            stepMuPlayback();
+        });
+
+        setControlsEnabled(false);
+        precomputeAllAsync(() => {
+            setControlsEnabled(true);
+            requestRedraw();
+        });
     </script>
 
     <div class="modal-overlay" id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title" aria-hidden="true">
